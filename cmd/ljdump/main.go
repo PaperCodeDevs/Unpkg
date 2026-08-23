@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/PaperCodeDevs/Luajit"
+	"github.com/PaperCodeDevs/Unpkg"
 )
 
 func main() {

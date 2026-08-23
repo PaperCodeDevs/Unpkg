@@ -3,8 +3,8 @@ package lua
 import (
 	"strings"
 
-	"github.com/PaperCodeDevs/Luajit/op"
-	"github.com/PaperCodeDevs/Luajit/parse"
+	"github.com/PaperCodeDevs/Unpkg/op"
+	"github.com/PaperCodeDevs/Unpkg/parse"
 )
 
 func (c *gen) call(in parse.Ins, code byte, tail bool, pc int) {

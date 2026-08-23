@@ -1,8 +1,8 @@
 package luajit
 
 import (
-	"github.com/PaperCodeDevs/Luajit/lua"
-	"github.com/PaperCodeDevs/Luajit/parse"
+	"github.com/PaperCodeDevs/Unpkg/lua"
+	"github.com/PaperCodeDevs/Unpkg/parse"
 )
 
 type Dump = parse.Dump

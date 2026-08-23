@@ -1,7 +1,7 @@
 package lua
 
 import (
-	"github.com/PaperCodeDevs/Luajit/op"
+	"github.com/PaperCodeDevs/Unpkg/op"
 )
 
 func (c *gen) tryWhile(pc, to int) int {

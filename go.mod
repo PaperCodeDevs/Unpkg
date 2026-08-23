@@ -1,3 +1,3 @@
-module github.com/PaperCodeDevs/Luajit
+module github.com/PaperCodeDevs/Unpkg
 
 go 1.26

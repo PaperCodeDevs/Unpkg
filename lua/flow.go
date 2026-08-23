@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PaperCodeDevs/Luajit/op"
-	"github.com/PaperCodeDevs/Luajit/parse"
+	"github.com/PaperCodeDevs/Unpkg/op"
+	"github.com/PaperCodeDevs/Unpkg/parse"
 )
 
 func isIdent(s string) bool {

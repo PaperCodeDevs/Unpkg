@@ -3,7 +3,7 @@ package lua
 import (
 	"strings"
 
-	"github.com/PaperCodeDevs/Luajit/op"
+	"github.com/PaperCodeDevs/Unpkg/op"
 )
 
 func (c *gen) tryIf(pc, to int) int {

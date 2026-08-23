@@ -1,8 +1,8 @@
 package lua
 
 import (
-	"github.com/PaperCodeDevs/Luajit/op"
-	"github.com/PaperCodeDevs/Luajit/parse"
+	"github.com/PaperCodeDevs/Unpkg/op"
+	"github.com/PaperCodeDevs/Unpkg/parse"
 )
 
 // holeSkip drops TSETB/TSETM/TSETV/CALL that index or call a slot never written
