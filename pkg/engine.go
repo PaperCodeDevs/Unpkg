@@ -129,17 +129,33 @@ func DumpEngineCatalog(pkgPath, outDir string) (string, int, error) {
 	if err := os.WriteFile(out, []byte(sb.String()), 0o644); err != nil {
 		return "", 0, err
 	}
-	meta := fmt.Sprintf("version=%d subtype=%d data=%d index=%d strings=%d objmark=%d ratio=%.3f\n",
-		p.Version, p.Subtype, len(p.Data), len(p.Index), len(strs), CountEngineObjectMarks(p.Data), p.ReadableRatio(8000))
-	if err := os.WriteFile(filepath.Join(outDir, "meta.txt"), []byte(meta), 0o644); err != nil {
-		return "", 0, err
-	}
 	if err := os.WriteFile(filepath.Join(outDir, "data.bin"), p.Data, 0o644); err != nil {
 		return "", 0, err
 	}
 	plain, err := decodePkgIndex(p.Index)
 	if err == nil {
 		_ = os.WriteFile(filepath.Join(outDir, "index_plain.bin"), plain, 0o644)
+	}
+	objs := ParseEngineObjects(p.Data)
+	var ob strings.Builder
+	for _, o := range objs {
+		fmt.Fprintf(&ob, "%d\t0x%x\t%d\t%s\t%d\n", o.Offset, o.Type, o.Count, o.Name, len(o.Fields))
+	}
+	_ = os.WriteFile(filepath.Join(outDir, "objects.tsv"), []byte(ob.String()), 0o644)
+	lookOK, lookN := 0, 0
+	if rd, e := OpenReader(p); e == nil {
+		ns := rd.Names("")
+		lookN = len(ns)
+		for _, n := range ns {
+			if _, e2 := rd.Lookup(n); e2 == nil {
+				lookOK++
+			}
+		}
+	}
+	meta := fmt.Sprintf("version=%d subtype=%d data=%d index=%d strings=%d objmark=%d objects=%d lookup=%d/%d ratio=%.3f\n",
+		p.Version, p.Subtype, len(p.Data), len(p.Index), len(strs), CountEngineObjectMarks(p.Data), len(objs), lookOK, lookN, p.ReadableRatio(8000))
+	if err := os.WriteFile(filepath.Join(outDir, "meta.txt"), []byte(meta), 0o644); err != nil {
+		return "", 0, err
 	}
 	return out, len(strs), nil
 }

@@ -42,6 +42,9 @@ func OpenReader(p *Pkg) (*Reader, error) {
 	}
 	lx, err := parseMaterialIndex(plain, p.Data)
 	if err != nil {
+		lx, err = parseEngineIndex(plain, p.Data)
+	}
+	if err != nil {
 		lx, err = parseLauncherIndex(plain, len(p.Data))
 	}
 	if err != nil {

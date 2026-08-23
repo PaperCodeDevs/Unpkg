@@ -18,6 +18,9 @@ type launcherIndex struct {
 	fileBase    int
 	nopad       bool
 	material    bool
+	engine      bool
+	shader      []assetRec
+	pre         []assetRec
 	resolveMode int
 }
 
@@ -124,6 +127,9 @@ func (lx *launcherIndex) lookup(data []byte, name string) ([]byte, error) {
 	}
 	if flag == ^uint32(0) {
 		return nil, fmt.Errorf("no index: %s", name)
+	}
+	if b, err := lx.lookupEngine(data, name, flag); err == nil {
+		return b, nil
 	}
 	var off, size uint32
 	off, size, ok2 := launcherResolve(flag, lx.files, lx.streams, len(data), lx.resolveMode)
