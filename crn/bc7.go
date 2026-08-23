@@ -29,7 +29,16 @@ func bc7expand(v, bits int) int {
 	if bits >= 8 {
 		return v
 	}
-	return (v << (8 - bits)) | (v >> (2*bits - 8))
+	out := 0
+	for shift := 8; shift > 0; {
+		shift -= bits
+		if shift >= 0 {
+			out |= v << shift
+		} else {
+			out |= v >> -shift
+		}
+	}
+	return out
 }
 
 func bc7lerp(a, b, iw int) uint8 {
@@ -41,7 +50,11 @@ func bc7subset(ns, part, px int) int {
 		return int((bc7part2[part] >> uint(px)) & 1)
 	}
 	if ns == 3 {
-		return int((bc7part3[part] >> uint(px*2)) & 3)
+		s := int(bc7part3[part][px])
+		if s > 2 {
+			return 2
+		}
+		return s
 	}
 	return 0
 }
@@ -183,6 +196,15 @@ func decodeBC7Block(src []byte, dst []byte, pitch int) {
 				ai = idx2[i]
 				aw = wtA
 			}
+		}
+		if e1 >= 6 {
+			e0, e1 = 0, 1
+		}
+		if ci >= len(cw) {
+			ci = len(cw) - 1
+		}
+		if ai >= len(aw) {
+			ai = len(aw) - 1
 		}
 		r8 := bc7lerp(ep[0][e0], ep[0][e1], cw[ci])
 		g8 := bc7lerp(ep[1][e0], ep[1][e1], cw[ci])

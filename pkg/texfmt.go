@@ -102,6 +102,8 @@ func decodeRawTex(b []byte) (*image.NRGBA, error) {
 		return rawRGBA4444(pix, w, h)
 	case 14:
 		return rawBGRA(pix, w, h)
+	case 25:
+		return crn.DecodeBC7(pix, w, h)
 	case 63:
 		return rawGray(pix, w, h)
 	default:
