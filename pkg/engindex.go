@@ -23,7 +23,7 @@ func parseEngineIndex(idx []byte, data []byte) (*launcherIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	pre := readEngine44(idx, data, 4, start)
+	pre := readEnginePre(idx, data, 4, start)
 	lx := &launcherIndex{
 		byName:   byName,
 		allNames: names,
@@ -33,45 +33,46 @@ func parseEngineIndex(idx []byte, data []byte) (*launcherIndex, error) {
 		shader:   shader,
 		pre:      pre,
 	}
-	skip, _, _, mode, files, streams, err := findLauncherLayout(idx, mapOff, byName, len(data))
-	if err == nil {
-		lx.files = files
-		lx.streams = streams
-		lx.fileBase = skip + 4
-		lx.resolveMode = mode
-	}
 	return lx, nil
 }
 
 func findEngine28(idx, data []byte, mapOff int) (int, []assetRec, error) {
-	maxN := (mapOff - 4) / 28
-	for n := maxN; n >= 1000; n-- {
-		start := mapOff - n*28
-		if start < 4 {
-			continue
+	n := 0
+	for {
+		b := mapOff - (n+1)*28
+		if b < 4 {
+			break
 		}
-		if !engine28Probe(idx, data, start, n) {
-			continue
+		if !engineRecMD5(idx, data, b, 28) {
+			break
 		}
-		files, hit := readEngine28(idx, data, start, n)
-		if hit < n*9/10 {
-			continue
+		off := u32le(idx, b+16)
+		sz := u32le(idx, b+20)
+		if !engineDXBC(data, off, sz) {
+			break
 		}
-		return start, files, nil
+		n++
 	}
-	return 0, nil, fmt.Errorf("engine 28B table")
+	if n < 1000 {
+		return 0, nil, fmt.Errorf("engine 28B table")
+	}
+	start := mapOff - n*28
+	files, hit := readEngine28(idx, data, start, n)
+	if hit < n*9/10 {
+		return 0, nil, fmt.Errorf("engine 28B md5")
+	}
+	return start, files, nil
 }
 
-func engine28Probe(idx, data []byte, start, n int) bool {
-	if n < 1000 {
+func engineDXBC(data []byte, off, sz uint32) bool {
+	if off < uncompOrigin || sz < 14 {
 		return false
 	}
-	for _, i := range []int{0, 1, n / 2, n - 1} {
-		if !engineRecMD5(idx, data, start+i*28, 28) {
-			return false
-		}
+	s := int(off - uncompOrigin)
+	if s+14 > len(data) {
+		return false
 	}
-	return true
+	return string(data[s+10:s+14]) == "DXBC"
 }
 
 func engineRecMD5(idx, data []byte, b, rec int) bool {
@@ -109,6 +110,37 @@ func readEngine28(idx, data []byte, start, n int) ([]assetRec, int) {
 		}
 	}
 	return files, hit
+}
+
+func readEnginePre(idx, data []byte, from, shaderStart int) []assetRec {
+	bestN44, bestHit := 0, -1
+	for n44 := 0; from+n44*assetRecBytes <= shaderStart; n44++ {
+		mid := from + n44*assetRecBytes
+		if (shaderStart-mid)%28 != 0 {
+			continue
+		}
+		n28 := (shaderStart - mid) / 28
+		hit := 0
+		for i := 0; i < n44; i++ {
+			if engineRecMD5(idx, data, from+i*assetRecBytes, assetRecBytes) {
+				hit++
+			}
+		}
+		_, h28 := readEngine28(idx, data, mid, n28)
+		hit += h28
+		if hit > bestHit {
+			bestHit, bestN44 = hit, n44
+		}
+	}
+	mid := from + bestN44*assetRecBytes
+	n28 := (shaderStart - mid) / 28
+	out := make([]assetRec, bestN44+n28)
+	copy(out, readEngine44(idx, data, from, mid))
+	if n28 > 0 {
+		part, _ := readEngine28(idx, data, mid, n28)
+		copy(out[bestN44:], part)
+	}
+	return out
 }
 
 func readEngine44(idx, data []byte, start, end int) []assetRec {
