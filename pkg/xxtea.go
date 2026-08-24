@@ -1,6 +1,44 @@
 package pkg
 
-func decryptXXTEA(data []byte, key []byte, includeLength bool) []byte {
+func EncryptXXTEA(data []byte, key []byte, includeLength bool) []byte {
+	if len(data) == 0 {
+		return data
+	}
+	v := xxteaBytesToUint32s(data, includeLength)
+	if len(v) < 2 {
+		return data
+	}
+	k := xxteaBytesToUint32s(xxteaPadKey(key), false)
+	if len(k) < 4 {
+		return data
+	}
+
+	var (
+		n     = len(v) - 1
+		z     = v[n]
+		y     = v[0]
+		delta = uint32(0x9e3779b9)
+		q     = 6 + 52/(n+1)
+		sum   uint32
+	)
+
+	for i := 0; i < q; i++ {
+		sum += delta
+		e := (sum >> 2) & 3
+		for p := 0; p < n; p++ {
+			y = v[p+1]
+			z = v[p] + xxteaMX(sum, y, z, p, int(e), k)
+			v[p] = z
+		}
+		y = v[0]
+		z = v[n] + xxteaMX(sum, y, z, n, int(e), k)
+		v[n] = z
+	}
+
+	return xxteaUint32sToBytes(v, false)
+}
+
+func DecryptXXTEA(data []byte, key []byte, includeLength bool) []byte {
 	if len(data) == 0 {
 		return data
 	}
@@ -12,12 +50,16 @@ func decryptXXTEA(data []byte, key []byte, includeLength bool) []byte {
 	if len(k) < 4 {
 		return data
 	}
-	n := len(v) - 1
-	z := v[n]
-	y := v[0]
-	delta := uint32(0x9e3779b9)
-	q := 6 + 52/(n+1)
-	sum := uint32(q) * delta
+
+	var (
+		n     = len(v) - 1
+		z     = v[n]
+		y     = v[0]
+		delta = uint32(0x9e3779b9)
+		q     = 6 + 52/(n+1)
+		sum   = uint32(q) * delta
+	)
+
 	for sum != 0 {
 		e := (sum >> 2) & 3
 		for p := n; p > 0; p-- {
@@ -30,6 +72,7 @@ func decryptXXTEA(data []byte, key []byte, includeLength bool) []byte {
 		v[0] = y
 		sum -= delta
 	}
+
 	return xxteaUint32sToBytes(v, includeLength)
 }
 

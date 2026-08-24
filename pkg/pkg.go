@@ -129,7 +129,7 @@ func DecryptXXTEAUnzip(b64 []byte, key []byte) ([]byte, error) {
 			return nil, fmt.Errorf("DecryptXXTEAUnzip: base64: %w", err)
 		}
 	}
-	dec := decryptXXTEA(raw, key, false)
+	dec := DecryptXXTEA(raw, key, false)
 	if len(dec) < 4 {
 		return nil, fmt.Errorf("DecryptXXTEAUnzip: too short")
 	}
