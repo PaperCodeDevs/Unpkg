@@ -23,7 +23,7 @@ func MeshAllowed(typ string) bool {
 
 func IsPlantType(typ string) bool {
 	t := NormalizeType(typ)
-	for _, n := range []string{"flower", "herb", "lily", "sapling", "vine"} {
+	for _, n := range []string{"flower", "herb", "lily", "sapling", "vine", "melonstem", "waterweed", "sawtooth", "leafpile", "rainbowgrass", "homelandplant", "icecrystalfern"} {
 		if strings.Contains(t, n) {
 			return true
 		}
@@ -92,4 +92,5 @@ var meshType = map[string]struct{}{
 var meshNeed = []string{
 	"trapdoor", "door", "torch", "lamp", "window", "glasspane", "screen",
 	"fence", "stair", "flower", "herb", "lily", "sapling", "ladder", "gate", "vine",
+	"melonstem", "waterweed", "sawtooth", "leafpile", "rainbowgrass", "homelandplant", "icecrystalfern",
 }
