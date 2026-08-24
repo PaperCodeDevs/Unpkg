@@ -163,13 +163,13 @@ func (c *gen) cmp(code byte, in parse.Ins) string {
 	l, r := c.get(int(in.A)), c.get(int(in.D))
 	switch code {
 	case op.OpISLT:
-		return l + " < " + r
+		return order("<", l, r)
 	case op.OpISGE:
-		return l + " >= " + r
+		return order(">=", l, r)
 	case op.OpISLE:
-		return l + " <= " + r
+		return order("<=", l, r)
 	case op.OpISGT:
-		return l + " > " + r
+		return order(">", l, r)
 	case op.OpISEQV:
 		return l + " == " + r
 	case op.OpISNEV:
@@ -211,4 +211,44 @@ func (c *gen) numD(d uint16) string {
 
 func (c *gen) numAD(d uint16, cc byte) string {
 	return c.numD(c.p.NumKey(d, cc))
+}
+
+func order(op, l, r string) string {
+	if litNum(l) && !litNum(r) {
+		switch op {
+		case "<":
+			op, l, r = ">", r, l
+		case "<=":
+			op, l, r = ">=", r, l
+		case ">":
+			op, l, r = "<", r, l
+		case ">=":
+			op, l, r = "<=", r, l
+		}
+	}
+	return l + " " + op + " " + r
+}
+
+func litNum(s string) bool {
+	i := 0
+	if len(s) > 0 && (s[0] == '-' || s[0] == '+') {
+		i = 1
+	}
+	if i >= len(s) {
+		return false
+	}
+	dot := false
+	for ; i < len(s); i++ {
+		if s[i] == '.' {
+			if dot {
+				return false
+			}
+			dot = true
+			continue
+		}
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
