@@ -50,7 +50,6 @@ func (s *fguiSet) atlasImage(name string) (*image.NRGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	img = flipNRGBA(img)
 	s.atlases[name] = img
 	return img, nil
 }
@@ -66,16 +65,7 @@ func decodeAtlasImage(raw []byte) (*image.NRGBA, error) {
 	b := im.Bounds()
 	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(out, out.Bounds(), im, b.Min, draw.Src)
-	return out, nil
-}
-
-func flipNRGBA(src *image.NRGBA) *image.NRGBA {
-	w, h := src.Bounds().Dx(), src.Bounds().Dy()
-	out := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		copy(out.Pix[y*out.Stride:(y+1)*out.Stride], src.Pix[(h-1-y)*src.Stride:(h-y)*src.Stride])
-	}
-	return out
+	return flipNRGBA(out), nil
 }
 
 func rotateRight(src *image.NRGBA) *image.NRGBA {

@@ -40,10 +40,26 @@ func TextureCRN(container []byte) ([]byte, error) {
 func DecodeTextureImage(container []byte) (*image.NRGBA, error) {
 	if src, err := TextureCRN(container); err == nil {
 		if img, err := crn.Decode(src); err == nil {
-			return img, nil
+			return flipNRGBA(img), nil
 		}
 	}
-	return decodeRawTex(container)
+	img, err := decodeRawTex(container)
+	if err != nil {
+		return nil, err
+	}
+	return flipNRGBA(img), nil
+}
+
+func flipNRGBA(src *image.NRGBA) *image.NRGBA {
+	if src == nil {
+		return nil
+	}
+	w, h := src.Bounds().Dx(), src.Bounds().Dy()
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		copy(out.Pix[y*out.Stride:(y+1)*out.Stride], src.Pix[(h-1-y)*src.Stride:(h-y)*src.Stride])
+	}
+	return out
 }
 
 func DecodeTexturePNG(container []byte) ([]byte, error) {

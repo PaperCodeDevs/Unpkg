@@ -62,7 +62,6 @@ func ExtractFGUI(pkgPaths []string, packName, outDir string) error {
 				_ = os.WriteFile(filepath.Join(dir, "atlas", base+".raw"), data, 0o644)
 				continue
 			}
-			img = flipNRGBA(img)
 			var buf bytes.Buffer
 			if err := png.Encode(&buf, img); err != nil {
 				return err
@@ -101,7 +100,6 @@ func ExtractUIFile(pkgPaths []string, name, dest string) error {
 				}
 				img, decErr := decodeAtlasImage(raw)
 				if decErr == nil {
-					img = flipNRGBA(img)
 					var buf bytes.Buffer
 					if err := png.Encode(&buf, img); err != nil {
 						return err
