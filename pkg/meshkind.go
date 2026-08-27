@@ -93,4 +93,5 @@ var meshNeed = []string{
 	"trapdoor", "door", "torch", "lamp", "window", "glasspane", "screen",
 	"fence", "stair", "flower", "herb", "lily", "sapling", "ladder", "gate", "vine",
 	"melonstem", "waterweed", "sawtooth", "leafpile", "rainbowgrass", "homelandplant", "icecrystalfern",
+	"bed",
 }
