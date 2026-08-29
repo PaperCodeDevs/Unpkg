@@ -81,6 +81,9 @@ func (c *codec) decodeBits(n uint32) uint32 {
 }
 
 func (c *codec) decode(m *dataModel) uint32 {
+	if m == nil || m.tables == nil {
+		return 0
+	}
 	t := m.tables
 	if c.bitCnt < 24 {
 		if c.bitCnt < 16 {

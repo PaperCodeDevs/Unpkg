@@ -1,6 +1,9 @@
 package pkg
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 var cubeStemSuf = []string{
 	"_top", "_bottom", "_side", "_up", "_down",
@@ -40,16 +43,87 @@ func pickTex(have map[string]string, names ...string) string {
 	return ""
 }
 
+var junkVariantSuf = []string{
+	"_emi", "_mix", "_proto", "_matcap", "_notactivated",
+	"_x", "_y", "_z",
+}
+
+func junkVariant(name string) bool {
+	for _, s := range junkVariantSuf {
+		if strings.HasSuffix(name, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func pickNumVariant(have map[string]string, stem string) string {
+	if stem == "" {
+		return ""
+	}
+	for _, c := range []string{stem + "1", stem + "2", stem + "3", stem + "_1", stem + "_0"} {
+		if junkVariant(c) {
+			continue
+		}
+		if hit := pickTex(have, c); hit != "" {
+			return hit
+		}
+	}
+	return ""
+}
+
+func pickStemVariant(have map[string]string, stem string) string {
+	if stem == "" {
+		return ""
+	}
+	for _, c := range []string{stem + "_s0", stem + "_s1", stem + "_green"} {
+		if hit := pickTex(have, c); hit != "" {
+			return hit
+		}
+	}
+	pre := stem + "_"
+	var vars []string
+	for b := range have {
+		if !strings.HasPrefix(b, pre) || b == stem {
+			continue
+		}
+		if junkVariant(b) || strings.HasSuffix(b, "_m") || strings.HasSuffix(b, "_light") {
+			continue
+		}
+		vars = append(vars, b)
+	}
+	if len(vars) == 0 {
+		return ""
+	}
+	sort.Strings(vars)
+	return pickTex(have, vars[0])
+}
+
 func pickBase(have map[string]string, key string) string {
 	k := strings.ToLower(strings.TrimSpace(key))
 	if k == "" || k == "-" {
 		return ""
 	}
-	if hit := pickTex(have, k); hit != "" {
+	stem := texStem(k)
+	if hit := pickBaseCore(have, k, stem); hit != "" {
 		return hit
 	}
-	stem := texStem(k)
-	return pickTex(have, stem+"_upper", stem+"_lower", k+"_upper", k+"_lower", stem+"_top", stem+"_side")
+	if stem == k {
+		return pickStemVariant(have, stem)
+	}
+	return ""
+}
+
+func pickBaseCore(have map[string]string, k, stem string) string {
+	if !junkVariant(k) {
+		if hit := pickTex(have, k); hit != "" {
+			return hit
+		}
+	}
+	if hit := pickTex(have, stem+"_upper", stem+"_lower", k+"_upper", k+"_lower", stem+"_top", stem+"_side"); hit != "" && !junkVariant(hit) {
+		return hit
+	}
+	return pickNumVariant(have, stem)
 }
 
 func pickPrefix(have map[string]string, key string) string {
@@ -62,7 +136,7 @@ func pickPrefix(have map[string]string, key string) string {
 	n := 0
 	for b := range have {
 		if b == k || strings.HasPrefix(b, pre) {
-			if strings.HasSuffix(b, "_mix") || strings.HasSuffix(b, "_emi") {
+			if junkVariant(b) {
 				continue
 			}
 			n++

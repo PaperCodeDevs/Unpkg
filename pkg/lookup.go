@@ -11,6 +11,7 @@ type Reader struct {
 	idx      *pkgIndex
 	launcher *launcherIndex
 	over     *overlayPair
+	alt      *Reader
 	cache    map[int][]byte
 	bases    map[string]string
 	lower    map[string]string
@@ -127,9 +128,12 @@ func (r *Reader) ConcatPlain() ([]byte, error) {
 	if r == nil || r.idx == nil {
 		return nil, fmt.Errorf("nil reader")
 	}
-	n := 0
+	var n uint64
 	for i := range r.idx.stor {
-		n += int(r.idx.stor[i].uncomp)
+		n += uint64(r.idx.stor[i].uncomp)
+	}
+	if n > concatMaxBytes {
+		return nil, fmt.Errorf("concat size %d", n)
 	}
 	out := make([]byte, 0, n)
 	for i := range r.idx.stor {
@@ -212,6 +216,9 @@ func (r *Reader) blockPlain(i int) ([]byte, error) {
 	if st.comp == st.uncomp {
 		plain = append([]byte(nil), raw...)
 	} else {
+		if !lz4RatioOK(uint64(st.comp), uint64(st.uncomp)) {
+			return nil, fmt.Errorf("uncomp ratio %d/%d", st.uncomp, st.comp)
+		}
 		plain, err = DecompressLZ4Block(raw, int(st.uncomp))
 		if err != nil {
 			return nil, err

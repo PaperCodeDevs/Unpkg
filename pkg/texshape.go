@@ -14,6 +14,22 @@ const (
 	DrawFence = 5
 )
 
+const (
+	TexDrawOpaque    = 0
+	TexDrawAlphatest = 2
+)
+
+func BlockDrawOf(typ, tex string) uint8 {
+	t := NormalizeType(typ)
+	if strings.Contains(t, "leaf") {
+		return TexDrawAlphatest
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(tex)), "leaves") {
+		return TexDrawAlphatest
+	}
+	return TexDrawOpaque
+}
+
 func NormalizeType(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	var b strings.Builder

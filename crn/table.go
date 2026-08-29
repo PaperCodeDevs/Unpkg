@@ -67,6 +67,9 @@ func (t *decoderTables) init(numSyms uint32, codeSizes []byte, tableBits uint32)
 			if i > maxSize {
 				maxSize = i
 			}
+			if curCode+n > uint32(1)<<i {
+				return false
+			}
 			minCodes[i-1] = curCode
 			mc := curCode + n - 1
 			t.maxCodes[i-1] = 1 + ((mc << (16 - i)) | ((1 << (16 - i)) - 1))

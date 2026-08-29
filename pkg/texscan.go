@@ -57,10 +57,77 @@ func ScanBlockDefPkgFaces(raw []byte, r *Reader) []BlockFace {
 				tex2 = hit
 			}
 		}
-		if tex1 == "" {
-			continue
+		if tex1 == "" && len(parts) <= maxFallbackCols {
+			tex1, tex2 = scanRowFallback(r.bases, parts)
+			if tex1 == "" {
+				continue
+			}
 		}
 		out = append(out, BlockFace{ID: id, Name: name, Tex1: tex1, Tex2: tex2})
+	}
+	return out
+}
+
+func scanRowFallback(have map[string]string, parts []string) (string, string) {
+	var t1, t2 string
+	done := func() bool { return t1 != "" && t2 != "" }
+	try := func(k string, seg bool) bool {
+		if len(k) < 4 || !asciiIdent(k) {
+			return false
+		}
+		var hit string
+		if seg {
+			hit = pickBaseCore(have, k, texStem(k))
+		} else {
+			hit = pickBase(have, k)
+		}
+		if hit == "" {
+			return false
+		}
+		if cubeFillTex(hit) && k != hit && k != "grass" && k != "dirt" {
+			return false
+		}
+		if t1 == "" {
+			t1 = hit
+		} else if t2 == "" && hit != t1 {
+			t2 = hit
+		}
+		return done()
+	}
+	for _, p := range parts {
+		k := strings.ToLower(strings.TrimSpace(p))
+		if k == "" {
+			continue
+		}
+		if try(k, false) {
+			return t1, t2
+		}
+	}
+	for _, p := range parts {
+		k := strings.ToLower(strings.TrimSpace(p))
+		if k == "" || strings.ContainsAny(k, "./\\") {
+			continue
+		}
+		for _, seg := range asciiSegs(k) {
+			if try(seg, true) {
+				return t1, t2
+			}
+		}
+	}
+	return t1, t2
+}
+
+func asciiSegs(k string) []string {
+	var out []string
+	start := -1
+	for i := 0; i <= len(k); i++ {
+		ok := i < len(k) && ((k[i] >= 'a' && k[i] <= 'z') || k[i] == '_')
+		if ok && start < 0 {
+			start = i
+		} else if !ok && start >= 0 {
+			out = append(out, k[start:i])
+			start = -1
+		}
 	}
 	return out
 }
@@ -94,6 +161,8 @@ func scanFacesFile(path string, r *Reader) []BlockFace {
 func cubeFillTex(n string) bool {
 	return n == "grass_top" || n == "grass_side" || n == "dirt"
 }
+
+const maxFallbackCols = 120
 
 func DefaultDefDumpPaths() []string {
 	return []string{

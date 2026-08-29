@@ -115,7 +115,13 @@ func parsePkgIndex(idx []byte) (*pkgIndex, error) {
 		raw := idx[off : off+nl]
 		off += nl
 		for off%4 != 0 {
+			if off >= len(idx) {
+				return nil, fmt.Errorf("name pad %d", i)
+			}
 			off++
+		}
+		if off+4 > len(idx) {
+			return nil, fmt.Errorf("name pad %d", i)
 		}
 		flag := u32le(idx, off)
 		off += 4

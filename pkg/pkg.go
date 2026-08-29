@@ -143,9 +143,12 @@ func DecryptXXTEAUnzip(b64 []byte, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("DecryptXXTEAUnzip: zlib: %w", err)
 	}
 	defer zr.Close()
-	out, err := io.ReadAll(zr)
+	out, err := io.ReadAll(io.LimitReader(zr, int64(maxInflateBytes)+1))
 	if err != nil {
 		return nil, fmt.Errorf("DecryptXXTEAUnzip: inflate: %w", err)
+	}
+	if len(out) > maxInflateBytes {
+		return nil, fmt.Errorf("DecryptXXTEAUnzip: inflate too large")
 	}
 	return out, nil
 }

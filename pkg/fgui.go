@@ -47,25 +47,41 @@ type fguiBuf struct {
 	pos int
 }
 
+func (z *fguiBuf) has(n int) bool {
+	return z.pos >= 0 && n >= 0 && z.pos <= len(z.b)-n
+}
+
 func (z *fguiBuf) u8() byte {
+	if !z.has(1) {
+		return 0
+	}
 	v := z.b[z.pos]
 	z.pos++
 	return v
 }
 
 func (z *fguiBuf) i16() int {
+	if !z.has(2) {
+		return 0
+	}
 	v := int(int16(binary.BigEndian.Uint16(z.b[z.pos:])))
 	z.pos += 2
 	return v
 }
 
 func (z *fguiBuf) u16() int {
+	if !z.has(2) {
+		return 0
+	}
 	v := int(binary.BigEndian.Uint16(z.b[z.pos:]))
 	z.pos += 2
 	return v
 }
 
 func (z *fguiBuf) i32() int {
+	if !z.has(4) {
+		return 0
+	}
 	v := int(int32(binary.BigEndian.Uint32(z.b[z.pos:])))
 	z.pos += 4
 	return v
@@ -73,7 +89,7 @@ func (z *fguiBuf) i32() int {
 
 func (z *fguiBuf) str() string {
 	n := z.u16()
-	if n < 0 || z.pos+n > len(z.b) {
+	if n < 0 || !z.has(n) {
 		return ""
 	}
 	s := string(z.b[z.pos : z.pos+n])

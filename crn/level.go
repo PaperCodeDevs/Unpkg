@@ -2,6 +2,11 @@ package crn
 
 import "encoding/binary"
 
+const (
+	maxLevelBytes  = 128 << 20
+	maxLevelPixels = 64 << 20
+)
+
 type unpacker struct {
 	data  []byte
 	h     *Header
@@ -95,14 +100,30 @@ func (u *unpacker) unpackLevel(level uint32) ([]byte, uint32, uint32, error) {
 	blocksX := (w + 3) >> 2
 	blocksY := (hh + 3) >> 2
 	pitch := u.h.blockSize() * blocksX
-	dst := make([]byte, pitch*blocksY)
+	total := uint64(pitch) * uint64(blocksY)
+	if blocksX == 0 || blocksY == 0 || total == 0 || total > maxLevelBytes {
+		return nil, 0, 0, errStream
+	}
+	if uint64(w)*uint64(hh) > maxLevelPixels {
+		return nil, 0, 0, errStream
+	}
+	dst := make([]byte, total)
 	if !u.codec.start(u.data[cur:next]) {
 		return nil, 0, 0, errStream
 	}
 	switch u.h.Format {
 	case FmtDXT1:
+		if len(u.colorEndpoints) == 0 || len(u.colorSelectors) == 0 {
+			return nil, 0, 0, errStream
+		}
 		u.unpackDXT1(dst, pitch, blocksX, blocksY)
 	case FmtDXT5, 3, 4, 5, 6:
+		if len(u.colorEndpoints) == 0 || len(u.colorSelectors) == 0 {
+			return nil, 0, 0, errStream
+		}
+		if len(u.alphaEndpoints) == 0 || len(u.alphaSelectors) < 3 {
+			return nil, 0, 0, errStream
+		}
 		u.unpackDXT5(dst, pitch, blocksX, blocksY)
 	default:
 		return nil, 0, 0, errStream

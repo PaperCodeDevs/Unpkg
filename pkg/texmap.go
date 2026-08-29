@@ -105,7 +105,27 @@ func LoadBlockFaces(basePath, patchPath string) ([]BlockFace, error) {
 		byID[f.ID] = f
 	}
 	for _, f := range patch {
-		byID[f.ID] = f
+		cur, ok := byID[f.ID]
+		if !ok {
+			byID[f.ID] = f
+			continue
+		}
+		if f.Name != "" {
+			cur.Name = f.Name
+		}
+		if f.Tex1 != "" && f.Tex1 != "-" {
+			cur.Tex1 = f.Tex1
+		}
+		if f.Tex2 != "" && f.Tex2 != "-" {
+			cur.Tex2 = f.Tex2
+		}
+		if f.Mix != "" {
+			cur.Mix = f.Mix
+		}
+		if f.Group != "" {
+			cur.Group = f.Group
+		}
+		byID[f.ID] = cur
 	}
 	out := make([]BlockFace, 0, len(byID))
 	for _, f := range byID {

@@ -10,12 +10,35 @@ var (
 	lz4Dec64 = [8]int{0, 0, 0, -1, 0, 1, 2, 3}
 )
 
+const (
+	lz4MaxRatio    = 65536
+	lz4RatioSlack  = 256
+	lz4MaxUncomp   = 512 << 20
+	concatMaxBytes = 2 << 30
+)
+
+func lz4RatioOK(comp, uncomp uint64) bool {
+	if uncomp > lz4MaxUncomp {
+		return false
+	}
+	if comp == 0 {
+		return uncomp == 0
+	}
+	if comp > 1<<48 {
+		return false
+	}
+	return uncomp <= comp*lz4MaxRatio+lz4RatioSlack
+}
+
 func DecompressLZ4Block(src []byte, maxSize int) ([]byte, error) {
 	if len(src) == 0 {
 		return nil, fmt.Errorf("DecompressLZ4Block: empty")
 	}
 	if maxSize <= 0 {
 		maxSize = 128 << 20
+	}
+	if maxSize > 1<<40 {
+		return nil, fmt.Errorf("DecompressLZ4Block: maxSize %d", maxSize)
 	}
 	dst := make([]byte, maxSize+32)
 	iend := len(src)
