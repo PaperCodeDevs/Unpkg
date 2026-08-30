@@ -11,6 +11,22 @@ func countBadOp(src string) int {
 	n := 0
 	for _, line := range strings.Split(src, "\n") {
 		s := strings.TrimSpace(line)
+		if strings.HasPrefix(s, "for ") {
+			rest := strings.TrimSpace(s[4:])
+			eq := strings.Index(rest, " = ")
+			in := strings.Index(rest, " in ")
+			var head string
+			if eq >= 0 && (in < 0 || eq < in) {
+				head = rest[:eq]
+			} else if in >= 0 {
+				head = rest[:in]
+			}
+			for _, part := range strings.Split(head, ",") {
+				if !okName(strings.TrimSpace(part)) {
+					n++
+				}
+			}
+		}
 		if !strings.HasPrefix(s, "-- ") {
 			continue
 		}
@@ -47,12 +63,25 @@ func auditFn(d *parse.Dump, src string, cov *Cover) {
 		return
 	}
 	cov.NeedFn += need
-	nAssign := strings.Count(src, " = function(")
-	nLeft := strings.Count(src, "local _c")
-	if nAssign-nLeft <= 0 {
+	if countFnEmit(src) < need {
 		cov.MissFn += need
 		cov.note("fnew")
 	}
+}
+
+func countFnEmit(src string) int {
+	n := 0
+	for _, line := range strings.Split(src, "\n") {
+		s := strings.TrimSpace(line)
+		if strings.HasPrefix(s, "function ") || strings.HasPrefix(s, "function(") || strings.HasPrefix(s, "local function ") {
+			n++
+			continue
+		}
+		if strings.Contains(s, " = function(") || strings.Contains(s, " = function ") {
+			n++
+		}
+	}
+	return n
 }
 
 func protoHasMethod(d *parse.Dump, p *parse.Proto) bool {

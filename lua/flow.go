@@ -3,6 +3,7 @@ package lua
 import (
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/PaperCodeDevs/Unpkg/op"
 	"github.com/PaperCodeDevs/Unpkg/parse"
@@ -12,12 +13,14 @@ func isIdent(s string) bool {
 	if s == "" {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		ok := c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || i > 0 && c >= '0' && c <= '9'
-		if !ok {
-			return false
+	for i, r := range s {
+		if r == '_' || unicode.IsLetter(r) {
+			continue
 		}
+		if i > 0 && unicode.IsDigit(r) {
+			continue
+		}
+		return false
 	}
 	return true
 }
@@ -80,6 +83,10 @@ func (c *gen) body(from, to int) {
 			pc = n
 			continue
 		}
+		if n := c.tryNamedFn(pc, to); n >= 0 {
+			pc = n
+			continue
+		}
 		if n := c.tryUclo(pc); n >= 0 {
 			pc = n
 			continue
@@ -110,6 +117,105 @@ func (c *gen) mark(from, to int) {
 	for i := from; i < to; i++ {
 		c.skip[i] = true
 	}
+}
+
+func (c *gen) tryNamedFn(pc, to int) int {
+	if c.opAt(pc) != op.OpFNEW {
+		return -1
+	}
+	in := c.p.Ins[pc]
+	ch := c.p.FNew(in.D, in.C)
+	if ch == nil {
+		return -1
+	}
+	a := int(in.A)
+	nxt := pc + 1
+	for nxt < to && c.opAt(nxt) == op.OpUCLO {
+		nxt++
+	}
+	if nxt >= to || c.skip[nxt] || skipIns(c.d, c.p, c.p.Ins[nxt], nxt) {
+		return -1
+	}
+	n := c.p.Ins[nxt]
+	title := ""
+	switch c.code(n) {
+	case op.OpGSET:
+		if int(n.A) != a {
+			return -1
+		}
+		s := c.p.Str(c.p.GCKey(n.D, n.C))
+		if !okName(s) {
+			return -1
+		}
+		title = s
+	case op.OpTSETS:
+		if int(n.A) != a {
+			return -1
+		}
+		field, ok := c.p.StrOK(uint16(n.C))
+		if !ok || !okName(field) {
+			return -1
+		}
+		obj := c.get(int(n.B))
+		if !identPath(obj) {
+			return -1
+		}
+		title = obj + "." + field
+	default:
+		return -1
+	}
+	if c.used == nil {
+		c.used = map[*parse.Proto]bool{}
+	}
+	c.used[ch] = true
+	emitFn(c.out, c.d, ch, c.indent, false, title, false)
+	c.set(a, title)
+	c.skip[pc] = true
+	c.skip[nxt] = true
+	return nxt
+}
+
+func identPath(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, p := range strings.Split(s, ".") {
+		if !okName(p) || slotName(p) {
+			return false
+		}
+	}
+	return true
+}
+
+func slotName(s string) bool {
+	if s == "" {
+		return false
+	}
+	if strings.HasPrefix(s, "_c") {
+		rest := s[2:]
+		if rest == "" {
+			return false
+		}
+		for _, c := range rest {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	if s[0] != 's' && s[0] != 'a' {
+		return false
+	}
+	rest := s[1:]
+	if rest == "" {
+		return false
+	}
+	for _, c := range rest {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *gen) skipNoise(pc, lim int) int {

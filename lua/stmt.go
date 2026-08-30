@@ -62,21 +62,17 @@ func (c *gen) stmt(in parse.Ins, code byte, pc int) {
 			c.used = map[*parse.Proto]bool{}
 		}
 		c.used[ch] = true
-		var inner strings.Builder
-		emitFn(&inner, c.d, ch, c.indent, false)
-		c.set(a, strings.TrimSpace(inner.String()))
 		name := c.freshName(a, pc, false)
-		c.line("local %s = %s", name, c.get(a))
+		emitFn(c.out, c.d, ch, c.indent, false, name, true)
 		c.set(a, name)
+		if c.loc == nil {
+			c.loc = map[int]string{}
+		}
+		c.loc[a] = name
 	case op.OpTNEW:
-		name := c.freshName(a, pc, true)
-		c.line("local %s = {}", name)
-		c.set(a, name)
+		c.storeNamed(a, pc, "{}", true)
 	case op.OpTDUP:
-		lit := c.dup(in.D, in.C)
-		name := c.freshName(a, pc, false)
-		c.line("local %s = %s", name, lit)
-		c.set(a, name)
+		c.store(a, pc, c.dup(in.D, in.C))
 	case op.OpGGET:
 		if c.p.Str(c.p.GCKey(in.D, in.C)) == "" {
 			return
@@ -133,10 +129,7 @@ func (c *gen) stmt(in parse.Ins, code byte, pc int) {
 	case op.OpRET, op.OpRETM, op.OpRET0, op.OpRET1:
 		c.ret(in, code)
 	case op.OpVARG:
-		c.set(a, "...")
-		name := c.localName(a, pc)
-		c.line("local %s = ...", name)
-		c.set(a, name)
+		c.store(a, pc, "...")
 	case op.OpBAND:
 		c.set(a, "bit.band("+c.get(int(in.B))+", "+c.get(int(in.C))+")")
 	case op.OpBOR:

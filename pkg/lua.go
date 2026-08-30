@@ -144,12 +144,13 @@ func DumpDecompilePkg(pkgPaths []string, outDir string) (GameScriptLuaResult, er
 		}
 		plain, err := r.ConcatPlain()
 		if err == nil {
+			srcRoot := filepath.Join(outDir, "source")
 			for _, e := range extractEmbeddedLuaSources(plain) {
 				key := strings.ToLower(e.Path)
 				if seenSrc[key] {
 					continue
 				}
-				dst := filepath.Join(outDir, SanitizeScriptOutPath(e.Path))
+				dst := filepath.Join(srcRoot, SanitizeScriptOutPath(e.Path))
 				if err := os.MkdirAll(filepath.Dir(dst), 0o755); err == nil {
 					_ = os.WriteFile(dst, e.Body, 0o644)
 					seenSrc[key] = true
@@ -266,6 +267,43 @@ func defaultResPkgs(names ...string) []string {
 		}
 	}
 	return nil
+}
+
+func DefaultAssetPkgDir() string {
+	appdata := os.Getenv("APPDATA")
+	if appdata == "" {
+		return ""
+	}
+	for _, name := range []string{"miniworddata110", "miniworddata121"} {
+		dir := filepath.Join(appdata, name, "pkg_assets")
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+	}
+	return ""
+}
+
+func ListAssetPkgs() []string {
+	dir := DefaultAssetPkgDir()
+	if dir == "" {
+		return nil
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		n := e.Name()
+		if !strings.EqualFold(filepath.Ext(n), ".pkg") {
+			continue
+		}
+		out = append(out, filepath.Join(dir, n))
+	}
+	return out
 }
 
 func SummarizeDump(label string, ok int, failed []string) string {

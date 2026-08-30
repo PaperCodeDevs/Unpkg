@@ -36,9 +36,7 @@ func (c *gen) tryAndOr(pc, to int) int {
 		join = " and "
 	}
 	expr := left + join + rhs
-	name := c.localName(slot, pc)
-	c.line("local %s = %s", name, expr)
-	c.set(slot, name)
+	c.store(slot, pc, expr)
 	c.mark(pc, tgt)
 	return tgt - 1
 }

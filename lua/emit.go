@@ -32,11 +32,11 @@ func Source(d *parse.Dump) string {
 	if d.Name != "" {
 		fmt.Fprintf(&b, "-- %s\n", d.Name)
 	}
-	emitFn(&b, d, d.Main, 0, true)
+	emitFn(&b, d, d.Main, 0, true, "", false)
 	return b.String()
 }
 
-func emitFn(b *strings.Builder, d *parse.Dump, p *parse.Proto, indent int, top bool) {
+func emitFn(b *strings.Builder, d *parse.Dump, p *parse.Proto, indent int, top bool, named string, local bool) {
 	if p == nil {
 		return
 	}
@@ -54,6 +54,7 @@ func emitFn(b *strings.Builder, d *parse.Dump, p *parse.Proto, indent int, top b
 		indent: indent,
 		out:    b,
 		used:   map[*parse.Proto]bool{},
+		loc:    map[int]string{},
 	}
 	if d.Flags&parse.FlagFR2 != 0 {
 		c.fr2 = 1
@@ -66,7 +67,13 @@ func emitFn(b *strings.Builder, d *parse.Dump, p *parse.Proto, indent int, top b
 	}
 	c.bindParams()
 	if !top {
-		c.line("function(%s)", strings.Join(c.params(), ", "))
+		if named != "" && local {
+			c.line("local function %s(%s)", named, strings.Join(c.params(), ", "))
+		} else if named != "" {
+			c.line("function %s(%s)", named, strings.Join(c.params(), ", "))
+		} else {
+			c.line("function(%s)", strings.Join(c.params(), ", "))
+		}
 		c.indent++
 	}
 	c.body(0, len(p.Ins))
@@ -86,6 +93,7 @@ type gen struct {
 	out    *strings.Builder
 	skip   map[int]bool
 	used   map[*parse.Proto]bool
+	loc    map[int]string
 }
 
 func (c *gen) emitUnused() {
@@ -97,7 +105,7 @@ func (c *gen) emitUnused() {
 			continue
 		}
 		var inner strings.Builder
-		emitFn(&inner, c.d, k.Child, c.indent, false)
+		emitFn(&inner, c.d, k.Child, c.indent, false, "", false)
 		c.line("local _c%d = %s", i, strings.TrimSpace(inner.String()))
 	}
 }
@@ -115,10 +123,65 @@ func (c *gen) params() []string {
 }
 
 func (c *gen) bindParams() {
+	if c.loc == nil {
+		c.loc = map[int]string{}
+	}
 	for i := 0; i < int(c.p.Params); i++ {
 		if n := c.p.SlotName(i, 0); okName(n) {
 			c.set(i, n)
+			c.loc[i] = n
+			continue
 		}
+		n := "a" + strconv.Itoa(i)
+		c.set(i, n)
+		c.loc[i] = n
+	}
+}
+
+func (c *gen) store(slot, pc int, expr string) {
+	c.storeNamed(slot, pc, expr, false)
+}
+
+func (c *gen) storeNamed(slot, pc int, expr string, tnew bool) {
+	if c.loc == nil {
+		c.loc = map[int]string{}
+	}
+	name := c.freshName(slot, pc, tnew)
+	prev := c.loc[slot]
+	if prev != "" && okName(prev) && !c.varStartsAt(name, pc) {
+		c.line("%s = %s", prev, expr)
+		c.set(slot, prev)
+		return
+	}
+	c.line("local %s = %s", name, expr)
+	c.set(slot, name)
+	c.loc[slot] = name
+}
+
+func (c *gen) storeN(slots []int, pc int, expr string) {
+	if c.loc == nil {
+		c.loc = map[int]string{}
+	}
+	names := make([]string, len(slots))
+	all := len(slots) > 0
+	for i, slot := range slots {
+		name := c.localName(slot, pc)
+		prev := c.loc[slot]
+		if prev != "" && okName(prev) && !c.varStartsAt(name, pc) {
+			names[i] = prev
+		} else {
+			names[i] = name
+			all = false
+		}
+	}
+	if all {
+		c.line("%s = %s", strings.Join(names, ", "), expr)
+	} else {
+		c.line("local %s = %s", strings.Join(names, ", "), expr)
+	}
+	for i, slot := range slots {
+		c.set(slot, names[i])
+		c.loc[slot] = names[i]
 	}
 }
 

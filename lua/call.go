@@ -40,20 +40,17 @@ func (c *gen) call(in parse.Ins, code byte, tail bool, pc int) {
 		return
 	}
 	if nres == 1 {
-		name := c.localName(base, pc)
-		c.line("local %s = %s", name, call)
-		c.set(base, name)
+		c.store(base, pc, call)
 		return
 	}
 	if nres > 32 {
 		nres = 32
 	}
-	lhs := make([]string, nres)
+	slots := make([]int, nres)
 	for i := 0; i < nres; i++ {
-		lhs[i] = c.localName(base+i, pc)
-		c.set(base+i, lhs[i])
+		slots[i] = base + i
 	}
-	c.line("local %s = %s", strings.Join(lhs, ", "), call)
+	c.storeN(slots, pc, call)
 }
 
 func methodCall(fn string, args []string) string {
