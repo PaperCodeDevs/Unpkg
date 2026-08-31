@@ -32,6 +32,10 @@ func ParseBlockMesh(b []byte) (*BlockMesh, error) {
 	nidx := int(binary.LittleEndian.Uint32(b[0x24:0x28]))
 	nvert := int(binary.LittleEndian.Uint32(b[0x34:0x38]))
 	idxBytes := int(binary.LittleEndian.Uint32(b[0x50:0x54]))
+	streams := int(binary.LittleEndian.Uint32(b[0x1C:0x20]))
+	if streams != 1 {
+		return nil, fmt.Errorf("blockmesh streams %d", streams)
+	}
 	if nidx <= 0 || nvert <= 0 || nidx > 200000 || nvert > 50000 {
 		return nil, fmt.Errorf("blockmesh nidx=%d nvert=%d", nidx, nvert)
 	}
@@ -39,6 +43,9 @@ func ParseBlockMesh(b []byte) (*BlockMesh, error) {
 		return nil, fmt.Errorf("blockmesh idx bytes %d", idxBytes)
 	}
 	idxEnd := meshHead + idxBytes
+	if idxEnd%4 != 0 {
+		idxEnd = (idxEnd + 3) &^ 3
+	}
 	declEnd := idxEnd + meshDecl
 	if declEnd+4 > len(b) {
 		return nil, fmt.Errorf("blockmesh decl")

@@ -193,29 +193,7 @@ func ExtractDefIDs(baseData, patchData []byte) (blocks, items map[int]string, er
 }
 
 func DumpDefIDs(basePkgPath, patchPkgPath, outDir string) (nBlock, nItem int, err error) {
-	basePkg, err := ParseFile(basePkgPath)
-	if err != nil {
-		return 0, 0, err
-	}
-	var patchData []byte
-	if strings.TrimSpace(patchPkgPath) != "" {
-		patchPkg, err := ParseFile(patchPkgPath)
-		if err != nil {
-			return 0, 0, err
-		}
-		patchData = patchPkg.Data
-	}
-	blocks, items, err := ExtractDefIDs(basePkg.Data, patchData)
-	if err != nil {
-		return 0, 0, err
-	}
-	if err := WriteIDMapCSV(filepath.Join(outDir, "block_ids.csv"), blocks); err != nil {
-		return 0, 0, err
-	}
-	if err := WriteIDMapCSV(filepath.Join(outDir, "item_ids.csv"), items); err != nil {
-		return 0, 0, err
-	}
-	return len(blocks), len(items), nil
+	return DumpCsvDefIDs(basePkgPath, patchPkgPath, outDir)
 }
 
 func repairItemEN(en string) string {

@@ -62,3 +62,27 @@ func TestParseHeaders(t *testing.T) {
 		t.Fatal("no pkg files")
 	}
 }
+
+func TestOverlayResolveUltrastone(t *testing.T) {
+	dir := testPkgDir(t)
+	base := filepath.Join(dir, "common_res.pkg")
+	patch := filepath.Join(dir, "patch_common_res.pkg")
+	if _, err := os.Stat(base); err != nil {
+		t.Skip("no common_res")
+	}
+	r, err := OpenOverlayFiles(base, patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, raw, err := r.ResolveTex("ultrastone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name == "" || len(raw) == 0 {
+		t.Fatalf("empty tex name=%q n=%d", name, len(raw))
+	}
+	png, err := DecodeTexturePNG(raw)
+	if err != nil || len(png) == 0 {
+		t.Fatalf("decode %v n=%d", err, len(png))
+	}
+}

@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/csv"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 type BlockFace struct {
 	ID      int
 	Name    string
+	Type    string
 	Tex1    string
 	Tex2    string
 	Mix     string
@@ -30,23 +32,120 @@ func ParseBlockDefFaces(raw []byte) []BlockFace {
 			continue
 		}
 		parts := splitFaceCSV(ln)
-		if len(parts) != 85 {
+		if !blockDefColsOK(len(parts)) {
 			continue
 		}
 		id, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 		if err != nil || id < 0 {
 			continue
 		}
-		out = append(out, BlockFace{
+		f := BlockFace{
 			ID:    id,
 			Name:  strings.TrimSpace(parts[1]),
 			Group: strings.TrimSpace(parts[13]),
 			Tex1:  strings.TrimSpace(parts[45]),
 			Tex2:  strings.TrimSpace(parts[46]),
 			Mix:   strings.TrimSpace(parts[81]),
+		}
+		if len(parts) > 7 {
+			f.Type = strings.TrimSpace(parts[7])
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+func blockDefColsOK(n int) bool {
+	return n == 85 || n == 86
+}
+
+func ParseBlockDefNamedCSV(raw []byte) []BlockFace {
+	if len(raw) >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF {
+		raw = raw[3:]
+	}
+	csvr := csv.NewReader(bytes.NewReader(raw))
+	csvr.LazyQuotes = true
+	csvr.FieldsPerRecord = -1
+	recs, err := csvr.ReadAll()
+	if err != nil || len(recs) < 2 {
+		return ParseBlockDefFaces(raw)
+	}
+	hdrRow := 0
+	tex1, tex2, mix, typ, grp := 45, 46, 81, 7, 13
+	find := func(row []string) bool {
+		t1, t2, mx, tp, g := -1, -1, -1, -1, -1
+		for i, h := range row {
+			switch strings.TrimSpace(h) {
+			case "Texture1":
+				t1 = i
+			case "Texture2":
+				t2 = i
+			case "MixTexture":
+				mx = i
+			case "Type":
+				tp = i
+			case "TextureGroup":
+				g = i
+			}
+		}
+		if t1 < 0 {
+			return false
+		}
+		tex1, tex2, mix, typ, grp = t1, t2, mx, tp, g
+		return true
+	}
+	if !find(recs[0]) && len(recs) > 1 && find(recs[1]) {
+		hdrRow = 1
+	}
+	var out []BlockFace
+	for _, rec := range recs[hdrRow+1:] {
+		if len(rec) == 0 {
+			continue
+		}
+		idStr := strings.TrimSpace(rec[0])
+		if idStr == "" || idStr[0] < '0' || idStr[0] > '9' {
+			continue
+		}
+		id, err := strconv.Atoi(idStr)
+		if err != nil || id < 0 {
+			continue
+		}
+		at := func(i int) string {
+			if i < 0 || i >= len(rec) {
+				return ""
+			}
+			return strings.TrimSpace(rec[i])
+		}
+		out = append(out, BlockFace{
+			ID:    id,
+			Name:  at(1),
+			Type:  at(typ),
+			Group: at(grp),
+			Tex1:  at(tex1),
+			Tex2:  at(tex2),
+			Mix:   at(mix),
 		})
 	}
 	return out
+}
+
+func LoadNamedBlockDef(gsPaths []string) ([]byte, []BlockFace, error) {
+	if len(gsPaths) == 0 {
+		return nil, nil, nil
+	}
+	base, patch := gsPaths[0], ""
+	if len(gsPaths) > 1 {
+		patch = gsPaths[len(gsPaths)-1]
+	}
+	rd, err := OpenOverlayFiles(base, patch)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, raw, err := rd.LookupCsvDef("blockdef")
+	if err != nil {
+		return nil, nil, err
+	}
+	return raw, ParseBlockDefNamedCSV(raw), nil
 }
 
 func splitFaceCSV(ln string) []string {
@@ -124,6 +223,9 @@ func LoadBlockFaces(basePath, patchPath string) ([]BlockFace, error) {
 		}
 		if f.Group != "" {
 			cur.Group = f.Group
+		}
+		if f.Type != "" {
+			cur.Type = f.Type
 		}
 		byID[f.ID] = cur
 	}

@@ -25,7 +25,30 @@ func OpenOverlay(base, patch *Pkg) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{over: &overlayPair{base: br, patch: pr}}, nil
+	r := &Reader{over: &overlayPair{base: br, patch: pr}, bases: map[string]string{}, lower: map[string]string{}}
+	mergeBases(r, br)
+	mergeBases(r, pr)
+	return r, nil
+}
+
+func mergeBases(dst, src *Reader) {
+	if dst == nil || src == nil {
+		return
+	}
+	if dst.bases == nil {
+		dst.bases = map[string]string{}
+	}
+	for k, v := range src.bases {
+		dst.bases[k] = v
+	}
+	if dst.lower == nil {
+		dst.lower = map[string]string{}
+	}
+	for k, v := range src.lower {
+		if _, ok := dst.lower[k]; !ok {
+			dst.lower[k] = v
+		}
+	}
 }
 
 func OpenOverlayFiles(basePath, patchPath string) (*Reader, error) {
