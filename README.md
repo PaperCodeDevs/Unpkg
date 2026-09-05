@@ -38,4 +38,6 @@ empty = 索引 `size=0`（云端 remotes 占位），不是解码失败。`Censu
 
 `OpenOverlay` 必须合并 base/patch 的 `bases`，否则 `ResolveTex` 在 overlay 上恒失败。方块表金标是 `Lookup("../script/csvdef/utf8/blockdef.csv")`：**3450** 行 / 86 列（双表头），不是 ConcatPlain 扫出来的 85 列 2988 行。抽检 id 1/100/104 Texture1 在 common_res 能解。
 
+`TintKey` / `CubeFacesRuntime`：与 SandboxGame `0x19E2D00` `"%s_%x"` 相同。平原 `grass_side_46a922` DXT SHA `f6e575b319d755e376c9c3cec51e908e54d9487805dac4aaf206893c23b21964`。`glass` 64×64 DXT SHA `b7979ed52885d0f15711d0df9a1eaf2b1a38aba6d8c37f79864486e509d7f38a`。fmt29 `DecodeTextureDXT` **4956/4956**（2026-09-01 `offline`）。
+
 未攻破（禁止盲撞）：common_res 内嵌 ZipCrypto 若干 `btree.lua` inflate 损坏或 `a0817i` 解出非 Lua；`libMiniBlock` `CompileSection` 逐面消隐未还原（`MiniCraftRendererBuildSectionMeshEvent` 在 SandboxGame 里是 SprayPaintMgr/BulletMgr 监听，不是 mesher）；3 个 `0x1C=2` 的 `.blockmesh`。
