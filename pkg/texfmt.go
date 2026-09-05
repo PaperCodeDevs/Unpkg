@@ -43,6 +43,9 @@ func DecodeTextureImage(container []byte) (*image.NRGBA, error) {
 	if IsRainbowTex(container) {
 		return DecodeRainbowTex(container)
 	}
+	if h, err := ParseTexHeader(container); err == nil && IsHDRFormat(h.Format) {
+		return DecodeTextureHDRImage(container)
+	}
 	if src, err := TextureCRN(container); err == nil {
 		if img, err := crn.Decode(src); err == nil {
 			return flipNRGBA(img), nil
