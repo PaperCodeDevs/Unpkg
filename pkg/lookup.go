@@ -214,6 +214,21 @@ func (r *Reader) blockPlain(i int) ([]byte, error) {
 	return plain, nil
 }
 
+func (r *Reader) DropCache() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	if r.cache != nil {
+		r.cache = map[int][]byte{}
+	}
+	r.mu.Unlock()
+	if r.over != nil {
+		r.over.base.DropCache()
+		r.over.patch.DropCache()
+	}
+}
+
 func (r *Reader) blockPeek(i int) ([]byte, error) {
 	r.mu.Lock()
 	b, ok := r.cache[i]
