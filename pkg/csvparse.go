@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 type CsvDefTable struct {
@@ -23,7 +25,9 @@ func ParseCsvDef(raw []byte) (*CsvDefTable, error) {
 	}
 	raw = bytes.ReplaceAll(raw, []byte{0}, nil)
 	if !utf8.Valid(raw) {
-		return nil, nil
+		if raw = decodeCsvGBK(raw); raw == nil {
+			return nil, nil
+		}
 	}
 	lines := splitCsvLines(raw)
 	if len(lines) == 0 {
@@ -112,6 +116,14 @@ func (t *CsvDefTable) IDName() map[int]string {
 		if _, ok := out[id]; !ok {
 			out[id] = name
 		}
+	}
+	return out
+}
+
+func decodeCsvGBK(raw []byte) []byte {
+	out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(raw)
+	if err != nil || !utf8.Valid(out) {
+		return nil
 	}
 	return out
 }
