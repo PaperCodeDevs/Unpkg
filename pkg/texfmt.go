@@ -7,12 +7,14 @@ import (
 	"image"
 	"image/png"
 
+	"github.com/PaperCodeDevs/Unpkg/astc"
 	"github.com/PaperCodeDevs/Unpkg/crn"
 )
 
+// 头 107 字节（103..107 是 DataSize 副本），像素从 107 起，文件尾多 1 字节填充；按 108 取会整体错位一字节。
 const (
 	texMagic   = 0x59A21C2C
-	texPayload = 108
+	texPayload = 107
 )
 
 func TextureCRN(container []byte) ([]byte, error) {
@@ -38,6 +40,9 @@ func TextureCRN(container []byte) ([]byte, error) {
 }
 
 func DecodeTextureImage(container []byte) (*image.NRGBA, error) {
+	if IsRainbowTex(container) {
+		return DecodeRainbowTex(container)
+	}
 	if src, err := TextureCRN(container); err == nil {
 		if img, err := crn.Decode(src); err == nil {
 			return flipNRGBA(img), nil
@@ -120,6 +125,9 @@ func decodeRawTex(b []byte) (*image.NRGBA, error) {
 		return rawBGRA(pix, w, h)
 	case 25:
 		return crn.DecodeBC7(pix, w, h)
+	case 48, 49, 50, 51, 52, 53:
+		bw, bh := astc.UnityBlockSize(format)
+		return astc.Decode(pix, w, h, bw, bh)
 	case 63:
 		return rawGray(pix, w, h)
 	default:
