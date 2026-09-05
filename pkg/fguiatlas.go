@@ -7,6 +7,7 @@ import (
 	"image/draw"
 	_ "image/jpeg"
 	"image/png"
+	"math"
 )
 
 func cropFGUISprite(s *fguiSet, h fguiHit) ([]byte, error) {
@@ -23,19 +24,94 @@ func cropFGUISprite(s *fguiSet, h fguiHit) ([]byte, error) {
 		w, hgt = sp.h, sp.w
 	}
 	b := img.Bounds()
-	if x < b.Min.X || y < b.Min.Y || x+w > b.Max.X || y+hgt > b.Max.Y || w <= 0 || hgt <= 0 {
-		return nil, fmt.Errorf("cropFGUISprite: 矩形越界 %d,%d %dx%d atlas=%s", x, y, w, hgt, b)
+	if aw, ah := h.atlasSize(); aw > 0 && ah > 0 && (aw != b.Dx() || ah != b.Dy()) {
+		x, y, w, hgt = scaleRect(x, y, w, hgt, float64(b.Dx())/float64(aw), float64(b.Dy())/float64(ah))
 	}
-	out := image.NewNRGBA(image.Rect(0, 0, w, hgt))
-	draw.Draw(out, out.Bounds(), img, image.Pt(x, y), draw.Src)
+	cx, cy, cw, ch := clampRect(x, y, w, hgt, b.Dx(), b.Dy())
+	if sp.w <= 0 || sp.h <= 0 || cw <= 0 || ch <= 0 || cx-x > 1 || cy-y > 1 || x+w-cx-cw > 1 || y+hgt-cy-ch > 1 {
+		return nil, fmt.Errorf("cropFGUISprite: 矩形越界 %d,%d %dx%d atlas=%s", sp.x, sp.y, sp.w, sp.h, b)
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, cw, ch))
+	draw.Draw(out, out.Bounds(), img, image.Pt(cx, cy), draw.Src)
 	if sp.rot {
 		out = rotateRight(out)
+	}
+	if out.Bounds().Dx() != sp.w || out.Bounds().Dy() != sp.h {
+		out = resizeNRGBA(out, sp.w, sp.h)
 	}
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, out); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func (h fguiHit) atlasSize() (int, int) {
+	if h.pkg == nil {
+		return 0, 0
+	}
+	at, ok := h.pkg.byID[h.sp.atlas]
+	if !ok || at.typ != fguiTypeAtlas {
+		return 0, 0
+	}
+	return at.w, at.h
+}
+
+func scaleRect(x, y, w, h int, sx, sy float64) (int, int, int, int) {
+	x0 := int(math.Round(float64(x) * sx))
+	y0 := int(math.Round(float64(y) * sy))
+	x1 := int(math.Round(float64(x+w) * sx))
+	y1 := int(math.Round(float64(y+h) * sy))
+	return x0, y0, x1 - x0, y1 - y0
+}
+
+func clampRect(x, y, w, h, maxW, maxH int) (int, int, int, int) {
+	if x < 0 {
+		w += x
+		x = 0
+	}
+	if y < 0 {
+		h += y
+		y = 0
+	}
+	if x+w > maxW {
+		w = maxW - x
+	}
+	if y+h > maxH {
+		h = maxH - y
+	}
+	return x, y, w, h
+}
+
+func resizeNRGBA(src *image.NRGBA, w, h int) *image.NRGBA {
+	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	if sw <= 0 || sh <= 0 || w <= 0 || h <= 0 {
+		return out
+	}
+	for y := 0; y < h; y++ {
+		fy := (float64(y)+0.5)*float64(sh)/float64(h) - 0.5
+		y0 := int(math.Floor(fy))
+		ty := fy - float64(y0)
+		y1 := min(y0+1, sh-1)
+		y0 = max(y0, 0)
+		for x := 0; x < w; x++ {
+			fx := (float64(x)+0.5)*float64(sw)/float64(w) - 0.5
+			x0 := int(math.Floor(fx))
+			tx := fx - float64(x0)
+			x1 := min(x0+1, sw-1)
+			x0 = max(x0, 0)
+			o := out.PixOffset(x, y)
+			p00, p10 := src.PixOffset(x0, y0), src.PixOffset(x1, y0)
+			p01, p11 := src.PixOffset(x0, y1), src.PixOffset(x1, y1)
+			for c := 0; c < 4; c++ {
+				top := float64(src.Pix[p00+c])*(1-tx) + float64(src.Pix[p10+c])*tx
+				bottom := float64(src.Pix[p01+c])*(1-tx) + float64(src.Pix[p11+c])*tx
+				out.Pix[o+c] = uint8(math.Round(top*(1-ty) + bottom*ty))
+			}
+		}
+	}
+	return out
 }
 
 func (s *fguiSet) atlasImage(name string) (*image.NRGBA, error) {

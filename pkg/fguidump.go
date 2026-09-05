@@ -18,12 +18,25 @@ type FGUIItemInfo struct {
 	H    int
 }
 
+type FGUISpriteInfo struct {
+	ItemID string
+	Atlas  string
+	File   string
+	X      int
+	Y      int
+	W      int
+	H      int
+	Rot    bool
+}
+
 type FGUIPackInfo struct {
-	Name   string
-	ID     string
-	Asset  string
-	Source string
-	Items  []FGUIItemInfo
+	Name    string
+	ID      string
+	Asset   string
+	Source  string
+	Version int
+	Items   []FGUIItemInfo
+	Sprites []FGUISpriteInfo
 }
 
 var OfficialFGUINeed = []struct {
@@ -46,13 +59,29 @@ var OfficialFGUINeed = []struct {
 }
 
 func toFGUIPack(p *fguiPkg, src string) FGUIPackInfo {
-	info := FGUIPackInfo{Name: p.name, ID: p.id, Asset: p.asset, Source: src}
+	info := FGUIPackInfo{Name: p.name, ID: p.id, Asset: p.asset, Source: src, Version: p.ver}
 	for _, it := range p.items {
 		info.Items = append(info.Items, FGUIItemInfo{
 			Type: it.typ, ID: it.id, Name: it.name, File: it.file, W: it.w, H: it.h,
 		})
+		if sp, ok := p.sprite[it.id]; ok {
+			info.Sprites = append(info.Sprites, FGUISpriteInfo{
+				ItemID: it.id, Atlas: sp.atlas, File: sp.file, X: sp.x, Y: sp.y, W: sp.w, H: sp.h, Rot: sp.rot,
+			})
+		}
 	}
 	return info
+}
+
+func ParseFGUIPack(raw []byte, asset string) (FGUIPackInfo, error) {
+	p, err := parseFGUI(raw, fguiAssetPath(asset))
+	if err != nil {
+		return FGUIPackInfo{}, err
+	}
+	if p.name == "" {
+		return FGUIPackInfo{}, fmt.Errorf("ParseFGUIPack: 无包名")
+	}
+	return toFGUIPack(p, ""), nil
 }
 
 func ListFGUI(pkgPaths []string) ([]FGUIPackInfo, error) {

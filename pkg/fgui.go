@@ -18,6 +18,7 @@ const (
 )
 
 type fguiPkg struct {
+	ver    int
 	id     string
 	name   string
 	asset  string
@@ -154,7 +155,7 @@ func parseFGUI(raw []byte, asset string) (*fguiPkg, error) {
 		return nil, fmt.Errorf("parseFGUI: magic")
 	}
 	z := &fguiBuf{b: raw, pos: 4}
-	_ = z.i32()
+	ver := z.i32()
 	z.u8()
 	id := z.str()
 	name := z.str()
@@ -172,7 +173,7 @@ func parseFGUI(raw []byte, asset string) (*fguiPkg, error) {
 		tab[i] = z.str()
 	}
 	p := &fguiPkg{
-		id: id, name: name, asset: asset,
+		ver: ver, id: id, name: name, asset: asset,
 		byName: map[string]fguiItem{},
 		byID:   map[string]fguiItem{},
 		sprite: map[string]fguiSprite{},

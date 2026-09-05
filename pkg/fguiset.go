@@ -8,10 +8,9 @@ import (
 )
 
 var fguiPackAlias = map[string]string{
-	"common3":         "common",
-	"ugc_common3":     "common",
-	"common3common5":  "common",
-	"common3common5 ": "common",
+	"common3":        "common",
+	"ugc_common3":    "common",
+	"common3common5": "common",
 }
 
 type fguiSet struct {
@@ -23,6 +22,7 @@ type fguiSet struct {
 
 type fguiHit struct {
 	pack string
+	pkg  *fguiPkg
 	item fguiItem
 	sp   fguiSprite
 }
@@ -55,10 +55,10 @@ func loadFGUISet(rs []*Reader) (*fguiSet, error) {
 				if !ok || sp.file == "" {
 					continue
 				}
-				if _, exists := s.byRes[it.name]; exists {
+				if old, exists := s.byRes[it.name]; exists && old.pack != p.name {
 					continue
 				}
-				s.byRes[it.name] = fguiHit{pack: p.name, item: it, sp: sp}
+				s.byRes[it.name] = fguiHit{pack: p.name, pkg: p, item: it, sp: sp}
 			}
 		}
 	}
@@ -77,18 +77,29 @@ func (s *fguiSet) lookup(pack, res string) (fguiHit, bool) {
 		if p == nil {
 			continue
 		}
-		it, ok := p.byName[res]
-		if !ok {
-			continue
+		if it, sp, ok := p.imageSprite(res); ok {
+			return fguiHit{pack: p.name, pkg: p, item: it, sp: sp}, true
 		}
-		sp, ok := p.sprite[it.id]
-		if !ok || sp.file == "" {
-			continue
-		}
-		return fguiHit{pack: p.name, item: it, sp: sp}, true
 	}
 	h, ok := s.byRes[res]
 	return h, ok
+}
+
+func (p *fguiPkg) imageSprite(res string) (fguiItem, fguiSprite, bool) {
+	if it, ok := p.byName[res]; ok {
+		if sp, ok := p.sprite[it.id]; ok && sp.file != "" {
+			return it, sp, true
+		}
+	}
+	for _, it := range p.items {
+		if it.typ != fguiTypeImage || it.name != res {
+			continue
+		}
+		if sp, ok := p.sprite[it.id]; ok && sp.file != "" {
+			return it, sp, true
+		}
+	}
+	return fguiItem{}, fguiSprite{}, false
 }
 
 func packCandidates(pack string) []string {
