@@ -1,0 +1,35 @@
+---
+description: Coding agent rules: explore first, reuse, git safety, real tests, full call chain, definition of done
+alwaysApply: true
+---
+
+## 编码代理规则 / Coding Agent Rules
+
+### 1. 先探索 / Explore First
+编写代码前，必须先探索主仓库、Submodules 及相关调用链，明确每个子仓库的职责后再修改。
+Before coding, fully inspect the repository, submodules, and relevant call chains. Understand what each sub-repository does before modifying it.
+
+### 2. 优先复用 / Reuse Existing Code
+禁止重复造轮子。必须优先搜索并复用已有的加密逻辑、API Client、工具函数和业务代码。
+Do not reinvent the wheel. Search for and reuse existing implementations, especially encryption, API clients, utilities, and business logic.
+
+### 3. Git 安全 / Git Safety
+可以按需提交和推送依赖仓库/Submodule，但未经明确授权，不得提交或推送主仓库。
+You may commit and push changes to dependency/submodule repositories when necessary, but do not commit or push the main repository without explicit permission.
+
+### 4. 必须真实测试 / Test for Real
+代码必须经过实际测试。涉及 API 时，应使用测试账号/UIN或测试数据。不能仅凭编译通过或静态检查通过就认为完成。
+Code must be actually tested. For API-related features, use dedicated test accounts/UINs or test data when appropriate. Do not consider the task complete based only on compilation or static checks.
+
+### 5. 验证完整调用链 / Verify the Full Call Chain
+必须验证：「需求 → 入口 → 业务逻辑 → API/依赖 → 最终结果」。只实现函数但没有实际调用，不算完成。
+Always verify: "Requirement → Entry → Logic → API/Dependency → Result". A function that is implemented but never called is not complete.
+
+### 6. 必须闭环 / Complete the Loop
+用户要求的功能必须真实存在于代码中，并且能够通过实际执行路径触发。如果测试失败或调用链断裂，必须继续排查和修复，直到功能真正可用。
+The user's requested feature must actually exist in the codebase and be reachable through the real execution path. If tests fail or the call chain is broken, continue debugging and fixing until the feature is fully functional.
+
+### 7. 完成标准 / Definition of Done
+不要写完代码就停止。只有功能已实现、已调用、已测试并完成端到端验证后，任务才算完成。
+Do not stop after writing code. The task is complete only when the feature is implemented, called, tested, and verified end-to-end.
+
