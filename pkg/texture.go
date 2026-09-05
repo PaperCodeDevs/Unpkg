@@ -38,12 +38,24 @@ func DecodeRainbow(plain []byte, rk RainbowKeys) []byte {
 }
 
 func ExtractBlockTexture(data []byte, textureKey string, opt BlockTexOpt) ([]byte, error) {
+	return extractBlockTexture(zipSource{data: data}, textureKey, opt)
+}
+
+func ExtractBlockTexturePkg(p *Pkg, textureKey string, opt BlockTexOpt) ([]byte, error) {
+	return extractBlockTexture(openZipSource(p), textureKey, opt)
+}
+
+func extractBlockTexture(src zipSource, textureKey string, opt BlockTexOpt) ([]byte, error) {
 	want := opt.Prefix + textureKey + opt.Suffix
-	for _, e := range ScanZipEntries(data) {
+	ents, err := src.entries()
+	if err != nil {
+		return nil, fmt.Errorf("ExtractBlockTexture %s: %w", textureKey, err)
+	}
+	for _, e := range ents {
 		if e.Name != want {
 			continue
 		}
-		plain, err := ExtractZipEntry(data, e, opt.Zip)
+		plain, err := src.extract(e, opt.Zip)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +87,13 @@ func DumpBlockTexturesReport(pkgPaths []string, outDir string, filterPrefix stri
 		if err != nil {
 			return res, err
 		}
-		for _, e := range ScanZipEntries(p.Data) {
+		src := openZipSource(p)
+		ents, err := src.entries()
+		if err != nil {
+			res.Failed = append(res.Failed, filepath.Base(path)+": "+err.Error())
+			continue
+		}
+		for _, e := range ents {
 			if !strings.HasPrefix(e.Name, opt.Prefix) {
 				continue
 			}
@@ -86,7 +104,7 @@ func DumpBlockTexturesReport(pkgPaths []string, outDir string, filterPrefix stri
 			if filterPrefix != "" && !strings.HasPrefix(key, filterPrefix) {
 				continue
 			}
-			plain, err := ExtractZipEntry(p.Data, e, opt.Zip)
+			plain, err := src.extract(e, opt.Zip)
 			if err != nil {
 				res.Failed = append(res.Failed, key+": "+err.Error())
 				continue

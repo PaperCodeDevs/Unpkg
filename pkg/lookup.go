@@ -204,6 +204,27 @@ func (r *Reader) blockPlain(i int) ([]byte, error) {
 		return b, nil
 	}
 	r.mu.Unlock()
+	plain, err := r.decodeBlock(i)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	r.cache[i] = plain
+	r.mu.Unlock()
+	return plain, nil
+}
+
+func (r *Reader) blockPeek(i int) ([]byte, error) {
+	r.mu.Lock()
+	b, ok := r.cache[i]
+	r.mu.Unlock()
+	if ok {
+		return b, nil
+	}
+	return r.decodeBlock(i)
+}
+
+func (r *Reader) decodeBlock(i int) ([]byte, error) {
 	st := r.idx.stor[i]
 	cs := r.idx.compAt[i]
 	ce := cs + uint64(st.comp)
@@ -227,8 +248,5 @@ func (r *Reader) blockPlain(i int) ([]byte, error) {
 	if len(plain) != int(st.uncomp) {
 		return nil, fmt.Errorf("uncomp %d got %d", st.uncomp, len(plain))
 	}
-	r.mu.Lock()
-	r.cache[i] = plain
-	r.mu.Unlock()
 	return plain, nil
 }

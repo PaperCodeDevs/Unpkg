@@ -43,20 +43,27 @@ func StatZipFallback(p *Pkg, keys ZipKeys, rk RainbowKeys) (ZipFallbackStat, err
 	if p == nil {
 		return st, nil
 	}
-	statDataZip(&st, p.Data, keys, rk)
-	r, err := OpenReader(p)
-	if err != nil {
-		return st, err
+	src := openZipSource(p)
+	statDataZip(&st, src, keys, rk)
+	r := src.rd
+	if r == nil {
+		var err error
+		if r, err = OpenReader(p); err != nil {
+			return st, err
+		}
 	}
 	statLookupZip(&st, r, keys, rk)
 	return st, nil
 }
 
-func statDataZip(st *ZipFallbackStat, data []byte, keys ZipKeys, rk RainbowKeys) {
-	ents := ScanZipEntries(data)
+func statDataZip(st *ZipFallbackStat, src zipSource, keys ZipKeys, rk RainbowKeys) {
+	ents, err := src.entries()
+	if err != nil {
+		return
+	}
 	st.DataZipEntries = len(ents)
 	for _, e := range ents {
-		plain, err := ExtractZipEntry(data, e, keys)
+		plain, err := src.extract(e, keys)
 		if err != nil {
 			st.DataExtractFail++
 			continue

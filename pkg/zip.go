@@ -25,29 +25,38 @@ type ZipEntry struct {
 	HeaderAt   int
 }
 
+func zipEntryAt(buf []byte, i int) (ZipEntry, bool) {
+	if i < 0 || i+30 > len(buf) || binary.LittleEndian.Uint32(buf[i:]) != ZipLocalMagic {
+		return ZipEntry{}, false
+	}
+	nlen := int(binary.LittleEndian.Uint16(buf[i+26:]))
+	elen := int(binary.LittleEndian.Uint16(buf[i+28:]))
+	if i+30+nlen+elen > len(buf) {
+		return ZipEntry{}, false
+	}
+	return ZipEntry{
+		Name:       string(buf[i+30 : i+30+nlen]),
+		Flag:       binary.LittleEndian.Uint16(buf[i+6:]),
+		Method:     binary.LittleEndian.Uint16(buf[i+8:]),
+		CRC32:      binary.LittleEndian.Uint32(buf[i+14:]),
+		CompSize:   binary.LittleEndian.Uint32(buf[i+18:]),
+		UncompSize: binary.LittleEndian.Uint32(buf[i+22:]),
+		DataOffset: i + 30 + nlen + elen,
+		HeaderAt:   i,
+	}, true
+}
+
 func ScanZipEntries(data []byte) []ZipEntry {
 	var out []ZipEntry
-	n := len(data)
-	for i := 0; i+30 <= n; i++ {
+	for i := 0; i+30 <= len(data); i++ {
 		if binary.LittleEndian.Uint32(data[i:]) != ZipLocalMagic {
 			continue
 		}
-		flag := binary.LittleEndian.Uint16(data[i+6:])
-		method := binary.LittleEndian.Uint16(data[i+8:])
-		crc := binary.LittleEndian.Uint32(data[i+14:])
-		csz := binary.LittleEndian.Uint32(data[i+18:])
-		usz := binary.LittleEndian.Uint32(data[i+22:])
-		nlen := int(binary.LittleEndian.Uint16(data[i+26:]))
-		elen := int(binary.LittleEndian.Uint16(data[i+28:]))
-		if i+30+nlen+elen+int(csz) > n {
+		e, ok := zipEntryAt(data, i)
+		if !ok || e.DataOffset+int(e.CompSize) > len(data) {
 			continue
 		}
-		name := string(data[i+30 : i+30+nlen])
-		out = append(out, ZipEntry{
-			Name: name, Flag: flag, Method: method, CRC32: crc,
-			CompSize: csz, UncompSize: usz,
-			DataOffset: i + 30 + nlen + elen, HeaderAt: i,
-		})
+		out = append(out, e)
 	}
 	return out
 }
@@ -120,25 +129,28 @@ func RawInflate(src []byte) ([]byte, error) {
 	return body, nil
 }
 
-func ExtractZipEntry(data []byte, e ZipEntry, keys ZipKeys) ([]byte, error) {
-	if e.Method != 8 {
-		return nil, fmt.Errorf("ExtractZipEntry %s: method=%d not deflate", e.Name, e.Method)
+func inflateZipPayload(payload []byte, e ZipEntry, keys ZipKeys) ([]byte, error) {
+	if e.Method != 0 && e.Method != 8 {
+		return nil, fmt.Errorf("method=%d unsupported", e.Method)
 	}
-	if e.DataOffset+int(e.CompSize) > len(data) {
-		return nil, fmt.Errorf("ExtractZipEntry %s: out of range", e.Name)
-	}
-	payload := data[e.DataOffset : e.DataOffset+int(e.CompSize)]
-	var comp []byte
+	comp := payload
 	if e.Flag&1 != 0 {
 		if len(payload) < 12 {
-			return nil, fmt.Errorf("ExtractZipEntry %s: cipher too short", e.Name)
+			return nil, fmt.Errorf("cipher too short")
 		}
-		dec := DecryptZipCrypto(payload, keys.K0, keys.K1, keys.K2)
-		comp = dec[12:]
-	} else {
-		comp = payload
+		comp = DecryptZipCrypto(payload, keys.K0, keys.K1, keys.K2)[12:]
 	}
-	body, err := RawInflate(comp)
+	if e.Method == 0 {
+		return append([]byte(nil), comp...), nil
+	}
+	return RawInflate(comp)
+}
+
+func ExtractZipEntry(data []byte, e ZipEntry, keys ZipKeys) ([]byte, error) {
+	if e.DataOffset < 0 || e.DataOffset+int(e.CompSize) > len(data) {
+		return nil, fmt.Errorf("ExtractZipEntry %s: out of range", e.Name)
+	}
+	body, err := inflateZipPayload(data[e.DataOffset:e.DataOffset+int(e.CompSize)], e, keys)
 	if err != nil {
 		return nil, fmt.Errorf("ExtractZipEntry %s: %w", e.Name, err)
 	}

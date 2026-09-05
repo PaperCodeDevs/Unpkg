@@ -26,7 +26,13 @@ func DumpScripts(pkgPaths []string, outDir string, keys ZipKeys, decrypt LuaDecr
 		if err != nil {
 			return res, err
 		}
-		for _, e := range ScanZipEntries(p.Data) {
+		src := openZipSource(p)
+		ents, err := src.entries()
+		if err != nil {
+			res.Failed = append(res.Failed, filepath.Base(path)+": "+err.Error())
+			continue
+		}
+		for _, e := range ents {
 			name := strings.ReplaceAll(e.Name, "\\", "/")
 			if !strings.HasSuffix(strings.ToLower(name), ".lua") {
 				continue
@@ -34,7 +40,7 @@ func DumpScripts(pkgPaths []string, outDir string, keys ZipKeys, decrypt LuaDecr
 			if seen[name] {
 				continue
 			}
-			body, err := ExtractZipEntry(p.Data, e, keys)
+			body, err := src.extract(e, keys)
 			if err != nil {
 				res.Failed = append(res.Failed, name+": inflate: "+err.Error())
 				continue
