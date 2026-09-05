@@ -3,7 +3,6 @@ package pkg
 import (
 	"crypto/md5"
 	"fmt"
-	"strings"
 )
 
 func parseEngineIndex(idx []byte, data []byte) (*launcherIndex, error) {
@@ -174,7 +173,7 @@ func (lx *launcherIndex) lookupEngine(data []byte, name string, flag uint32) ([]
 	if lx == nil || !lx.engine {
 		return nil, fmt.Errorf("no engine")
 	}
-	if strings.HasPrefix(strings.ToLower(name), "d3d11/") {
+	if isDXHashName(name) {
 		return sliceFlag(data, lx.shader, flag)
 	}
 	i := int(flag)
@@ -203,4 +202,30 @@ func sliceFlag(data []byte, files []assetRec, flag uint32) ([]byte, error) {
 		return nil, fmt.Errorf("range")
 	}
 	return append([]byte(nil), data[rec.off:rec.off+rec.size]...), nil
+}
+
+func (lx *launcherIndex) recordOffset(name string, flag uint32) int {
+	if lx == nil {
+		return -1
+	}
+	if lx.engine {
+		if isDXHashName(name) {
+			i := int(flag)
+			if i >= len(lx.shader) {
+				i -= len(lx.shader)
+			}
+			if i >= 0 && i < len(lx.shader) {
+				return int(lx.shader[i].off)
+			}
+			return -1
+		}
+		if i := int(flag); i >= 0 && i < len(lx.pre) {
+			return int(lx.pre[i].off)
+		}
+		return -1
+	}
+	if i := int(flag); i >= 0 && i < len(lx.files) {
+		return int(lx.files[i].off)
+	}
+	return -1
 }

@@ -3,14 +3,16 @@ package pkg
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
+	"strings"
 )
 
 const (
-	engineObjTypeOff = 7
-	engineObjIDOff   = 28
-	engineObjCntOff  = 44
-	engineObjFldOff  = 47
-	engineObjIDLen   = 16
+	engineTypeMax   = 8
+	engineTypeBytes = 6
+	engineGUIDLen   = 16
+	engineOmodMagic = 0x23456789
+	engineMaxField  = 64
 )
 
 type EngineField struct {
@@ -28,98 +30,116 @@ type EngineObject struct {
 }
 
 func ParseEngineObjects(data []byte) []EngineObject {
-	if len(data) == 0 {
+	plain, ok := DecodeWrapped(data)
+	if !ok {
+		plain = data
+	}
+	obj, ok := ParseEngineAsset("", plain)
+	if !ok {
 		return nil
 	}
-	marks := findEngineMarks(data)
-	out := make([]EngineObject, 0, len(marks))
-	for i, m := range marks {
-		end := len(data)
-		if i+1 < len(marks) {
-			end = marks[i+1]
-		} else if m+1<<20 < end {
-			end = m + 1<<20
-		}
-		out = append(out, parseEngineObj(data, m, end))
-	}
-	return out
+	return []EngineObject{obj}
 }
 
-func findEngineMarks(data []byte) []int {
-	mark := []byte(engineObjMark)
-	var pos []int
-	for i := 0; i+len(mark) <= len(data); i++ {
-		ok := true
-		for j := 0; j < len(mark); j++ {
-			if data[i+j] != mark[j] {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			pos = append(pos, i)
-			i += len(mark) - 1
+func ParseEngineAsset(name string, plain []byte) (EngineObject, bool) {
+	obj := EngineObject{Name: name}
+	if len(plain) < 8 {
+		return obj, false
+	}
+	inner := ""
+	switch {
+	case engineTypeTable(&obj, plain):
+	case binary.LittleEndian.Uint32(plain[:4]) == engineOmodMagic:
+		obj.Type = engineOmodMagic
+	case plain[0] == '<':
+		inner = engineXMLRoot(plain)
+	default:
+		inner = lenStrAt(plain, 0)
+	}
+	if inner != "" {
+		obj.Fields = append(obj.Fields, EngineField{Kind: 'n', Text: inner})
+	}
+	for _, s := range lenStrings(plain, engineMaxField) {
+		obj.Fields = append(obj.Fields, EngineField{Kind: 's', Text: s})
+		if inner == "" && (strings.Contains(s, "/") || strings.Contains(s, ".")) {
+			inner = s
 		}
 	}
-	return pos
+	if obj.Name == "" {
+		obj.Name = inner
+	}
+	return obj, true
 }
 
-func parseEngineObj(data []byte, m, end int) EngineObject {
-	obj := EngineObject{Offset: m}
-	if m+engineObjTypeOff+4 <= len(data) {
-		obj.Type = binary.LittleEndian.Uint32(data[m+engineObjTypeOff:])
-	}
-	if m+engineObjIDOff+engineObjIDLen <= len(data) {
-		obj.ID = hex.EncodeToString(data[m+engineObjIDOff : m+engineObjIDOff+engineObjIDLen])
-	}
-	if m+engineObjCntOff < len(data) {
-		obj.Count = int(data[m+engineObjCntOff])
-	}
-	start := m + engineObjFldOff
-	if start > end {
-		start = m
-	}
-	obj.Fields = scanFFFields(data, start, end)
-	if len(obj.Fields) > 0 {
-		obj.Name = obj.Fields[0].Text
-	}
-	return obj
-}
-
-func scanFFFields(data []byte, lo, hi int) []EngineField {
-	var out []EngineField
-	i := lo
-	for i+6 < hi {
-		if data[i] != 0xff {
-			i++
-			continue
-		}
-		kind := data[i+1]
-		n := int(binary.LittleEndian.Uint32(data[i+2 : i+6]))
-		s0 := i + 6
-		if n < 2 || n > 300 || s0+n > len(data) || s0+n > hi+32 {
-			i++
-			continue
-		}
-		s := data[s0 : s0+n]
-		if !ffPrintable(s) {
-			i++
-			continue
-		}
-		out = append(out, EngineField{Kind: kind, Text: string(s)})
-		i = s0 + n
-	}
-	return out
-}
-
-func ffPrintable(s []byte) bool {
-	if len(s) == 0 {
+func engineTypeTable(obj *EngineObject, plain []byte) bool {
+	// 解压后 Rainbow 资源头：u32 0 | u32 n | n×{u32 类型 id, u16 版本} | guid[16]
+	if binary.LittleEndian.Uint32(plain[:4]) != 0 {
 		return false
 	}
-	for _, c := range s {
-		if c < 32 || c > 126 {
-			return false
-		}
+	n := int(binary.LittleEndian.Uint32(plain[4:8]))
+	if n < 1 || n > engineTypeMax || 8+n*engineTypeBytes+engineGUIDLen > len(plain) {
+		return false
 	}
+	for i := 0; i < n; i++ {
+		off := 8 + i*engineTypeBytes
+		id := binary.LittleEndian.Uint32(plain[off:])
+		ver := binary.LittleEndian.Uint16(plain[off+4:])
+		if i == 0 {
+			obj.Type = id
+		}
+		obj.Fields = append(obj.Fields, EngineField{Kind: 't', Text: fmt.Sprintf("%08x:v%d", id, ver)})
+	}
+	obj.Count = n
+	g := 8 + n*engineTypeBytes
+	obj.ID = hex.EncodeToString(plain[g : g+engineGUIDLen])
 	return true
+}
+
+func engineXMLRoot(plain []byte) string {
+	end := strings.IndexAny(string(plain[:min(len(plain), 128)]), " >\r\n")
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimPrefix(string(plain[:end]), "<")
+}
+
+func (r *Reader) EngineObjects() []EngineObject {
+	if r == nil {
+		return nil
+	}
+	var out []EngineObject
+	for _, n := range r.Names("") {
+		if isDXHashName(n) {
+			continue
+		}
+		b, err := r.Lookup(n)
+		if err != nil || len(b) == dxHashLen {
+			continue
+		}
+		plain, ok := DecodeWrapped(b)
+		if !ok {
+			plain = b
+		}
+		obj, ok := ParseEngineAsset(n, plain)
+		if !ok {
+			continue
+		}
+		obj.Offset = r.entryOffset(n)
+		out = append(out, obj)
+	}
+	return out
+}
+
+func (r *Reader) entryOffset(name string) int {
+	if r.launcher == nil {
+		return -1
+	}
+	if alt, ok := r.lower[strings.ToLower(name)]; ok {
+		name = alt
+	}
+	flag, ok := r.launcher.byName[name]
+	if !ok {
+		return -1
+	}
+	return r.launcher.recordOffset(name, flag)
 }

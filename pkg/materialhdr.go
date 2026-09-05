@@ -8,26 +8,27 @@ import (
 )
 
 const (
-	MaterialHdrSize   = 36
-	materialHdrSHA1   = 20
-	materialHdrPayOff = 26
+	MaterialHdrSize  = 30
+	materialHdrSHA1  = 20
+	materialPayOff   = 20
+	materialItemHead = 24
 )
 
 type MaterialHdr struct {
-	CodeSize uint32
-	Type     uint16
-	SHA1     [20]byte
-	Payload  uint32
-	Ver      uint8
-	Stage    uint8
-	Slot     uint8
-	Stage2   uint8
-	Extra    uint16
+	RawSize uint32
+	SHA1    [20]byte
+	Payload uint32
+	Ver     uint8
+	SRV     uint8
+	CB      uint8
+	Sampler uint8
 }
 
 type MaterialShader struct {
 	Hdr    MaterialHdr
+	Plain  []byte
 	DXBC   []byte
+	Extra  []byte
 	Digest [16]byte
 }
 
@@ -35,49 +36,56 @@ type MaterialHdrStat struct {
 	Blobs     int
 	Shader    int
 	SHA1FP    int
+	Material  int
 	Other     int
+	SizeOK    int
 	NameOK    int
-	StageDup  int
 	PayloadOK int
 	DXBCOk    int
+	BindOK    int
+	CountOK   int
 	Stages    [6]int
-	Types     map[uint16]int
-	Extras    map[uint16]int
+	Kinds     map[uint8]int
 }
 
-func ParseMaterialHdr(b []byte) (MaterialHdr, error) {
+func ParseMaterialHdr(plain []byte) (MaterialHdr, error) {
+	// 解压后条目：sha1[20] u32(6+DXBC 总长) 01 SRV数 CB数 采样器数 00 00 DXBC
 	var h MaterialHdr
-	if len(b) < MaterialHdrSize {
+	if len(plain) < MaterialHdrSize {
 		return h, fmt.Errorf("material hdr short")
 	}
-	h.CodeSize = binary.LittleEndian.Uint32(b[0:4])
-	h.Type = binary.LittleEndian.Uint16(b[4:6])
-	copy(h.SHA1[:], b[6:26])
-	h.Payload = binary.LittleEndian.Uint32(b[materialHdrPayOff:30])
-	h.Ver = b[30]
-	h.Stage = b[31]
-	h.Slot = b[32]
-	h.Stage2 = b[33]
-	h.Extra = binary.LittleEndian.Uint16(b[34:36])
+	copy(h.SHA1[:], plain[:materialHdrSHA1])
+	h.Payload = binary.LittleEndian.Uint32(plain[materialPayOff : materialPayOff+4])
+	h.Ver = plain[materialItemHead]
+	h.SRV = plain[materialItemHead+1]
+	h.CB = plain[materialItemHead+2]
+	h.Sampler = plain[materialItemHead+3]
 	return h, nil
 }
 
 func SplitMaterialShader(blob []byte) (MaterialShader, error) {
 	var out MaterialShader
-	if len(blob) < MaterialHdrSize+32 {
-		return out, fmt.Errorf("material shader short")
+	plain, ok := DecodeWrapped(blob)
+	if !ok {
+		return out, fmt.Errorf("material shader lz4")
 	}
-	if string(blob[MaterialHdrSize:MaterialHdrSize+4]) != "DXBC" {
+	if len(plain) < MaterialHdrSize+32 || string(plain[MaterialHdrSize:MaterialHdrSize+4]) != dxFourCC {
 		return out, fmt.Errorf("material shader magic")
 	}
-	h, err := ParseMaterialHdr(blob[:MaterialHdrSize])
+	h, err := ParseMaterialHdr(plain)
 	if err != nil {
 		return out, err
 	}
-	dx := blob[MaterialHdrSize:]
+	h.RawSize = binary.LittleEndian.Uint32(blob[:4])
+	w, err := ParseDXWrap(plain[materialHdrSHA1:])
+	if err != nil {
+		return out, err
+	}
 	out.Hdr = h
-	out.DXBC = dx
-	copy(out.Digest[:], dx[4:20])
+	out.Plain = plain
+	out.DXBC = w.DXBC
+	out.Extra = w.Extra
+	copy(out.Digest[:], w.DXBC[4:20])
 	return out, nil
 }
 
@@ -87,96 +95,103 @@ func (h MaterialHdr) SHA1Hex() string {
 
 func (h MaterialHdr) MatchName(name string) bool {
 	sum, ok := materialNameSHA1(name)
-	if !ok {
-		return false
-	}
-	return h.SHA1 == sum
-}
-
-func (h MaterialHdr) StageDupOK() bool {
-	return h.Stage == h.Stage2
+	return ok && h.SHA1 == sum
 }
 
 func (h MaterialHdr) PayloadOK(dxbc []byte) bool {
-	if len(dxbc) < 26 {
+	if len(dxbc) < 28 {
 		return false
 	}
-	return h.Payload == uint32(binary.LittleEndian.Uint16(dxbc[24:26]))+6
+	return h.Payload == binary.LittleEndian.Uint32(dxbc[24:28])+dxWrapSub
 }
 
-func MaterialStageName(st uint8) string {
-	switch st {
-	case 0:
-		return "ps"
-	case 1:
-		return "vs"
-	case 2:
-		return "gs"
-	case 3:
-		return "hs"
-	case 4:
-		return "ds"
-	case 5:
-		return "cs"
-	default:
-		return ""
-	}
+func (s MaterialShader) SizeOK() bool {
+	return int(s.Hdr.RawSize) == len(s.Plain)
+}
+
+func (s MaterialShader) Binding() (DXBinding, error) {
+	return ParseMaterialBinding(s.Extra)
+}
+
+func (s MaterialShader) CountsOK(bd DXBinding) bool {
+	return int(s.Hdr.SRV) == len(bd.Textures)+len(bd.Buffers) && int(s.Hdr.CB) == len(bd.CBuffers) && int(s.Hdr.Sampler) == len(bd.Textures)
 }
 
 func ClassifyMaterialBlob(blob []byte) string {
 	if len(blob) == materialHdrSHA1 {
 		return "sha1fp"
 	}
-	if len(blob) >= MaterialHdrSize+4 && string(blob[MaterialHdrSize:MaterialHdrSize+4]) == "DXBC" {
+	plain, ok := DecodeWrapped(blob)
+	if !ok {
+		return "other"
+	}
+	if len(plain) >= MaterialHdrSize+4 && string(plain[MaterialHdrSize:MaterialHdrSize+4]) == dxFourCC {
 		return "shader"
+	}
+	if lenStrAt(plain, 0) != "" {
+		return "material"
 	}
 	return "other"
 }
 
 func StatMaterialHdrs(names []string, blobs [][]byte) MaterialHdrStat {
-	st := MaterialHdrStat{Types: map[uint16]int{}, Extras: map[uint16]int{}}
+	st := MaterialHdrStat{Kinds: map[uint8]int{}}
 	for i, b := range blobs {
 		st.Blobs++
-		kind := ClassifyMaterialBlob(b)
-		switch kind {
+		switch ClassifyMaterialBlob(b) {
 		case "sha1fp":
 			st.SHA1FP++
+			continue
+		case "material":
+			st.Material++
 			continue
 		case "other":
 			st.Other++
 			continue
 		}
-		st.Shader++
 		sh, err := SplitMaterialShader(b)
 		if err != nil {
 			st.Other++
-			st.Shader--
 			continue
 		}
-		if sh.Hdr.StageDupOK() {
-			st.StageDup++
-		}
-		if sh.Hdr.PayloadOK(sh.DXBC) {
-			st.PayloadOK++
-		}
-		if len(sh.DXBC) >= 32 && string(sh.DXBC[:4]) == "DXBC" {
-			st.DXBCOk++
-		}
-		if sh.Hdr.Stage < 6 {
-			st.Stages[sh.Hdr.Stage]++
-		}
-		st.Types[sh.Hdr.Type]++
-		st.Extras[sh.Hdr.Extra]++
-		if i < len(names) && sh.Hdr.MatchName(names[i]) {
-			st.NameOK++
-		}
+		st.Shader++
+		statMaterialShader(&st, sh, i, names)
 	}
 	return st
 }
 
+func statMaterialShader(st *MaterialHdrStat, sh MaterialShader, i int, names []string) {
+	if sh.SizeOK() {
+		st.SizeOK++
+	}
+	if sh.Hdr.PayloadOK(sh.DXBC) {
+		st.PayloadOK++
+	}
+	if dxContainerLen(sh.DXBC) == len(sh.DXBC) {
+		st.DXBCOk++
+	}
+	if pt := DXProgramType(sh.DXBC); pt >= 0 && pt < len(st.Stages) {
+		st.Stages[pt]++
+	}
+	if i < len(names) && sh.Hdr.MatchName(names[i]) {
+		st.NameOK++
+	}
+	bd, err := sh.Binding()
+	if err != nil {
+		return
+	}
+	st.BindOK++
+	if sh.CountsOK(bd) {
+		st.CountOK++
+	}
+	for _, t := range bd.Textures {
+		st.Kinds[t.Kind]++
+	}
+}
+
 func (r *Reader) StatMaterialHdrs() MaterialHdrStat {
 	if r == nil {
-		return MaterialHdrStat{Types: map[uint16]int{}, Extras: map[uint16]int{}}
+		return MaterialHdrStat{Kinds: map[uint8]int{}}
 	}
 	names := r.Names("")
 	blobs := make([][]byte, 0, len(names))

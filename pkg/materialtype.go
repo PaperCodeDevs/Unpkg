@@ -1,38 +1,74 @@
 package pkg
 
-func (h MaterialHdr) TypeTag() byte {
-	return byte(h.Type)
+import "encoding/binary"
+
+const lenStrMax = 260
+
+func MaterialStageName(st int) string {
+	switch st {
+	case 0:
+		return "ps"
+	case 1:
+		return "vs"
+	case 2:
+		return "gs"
+	case 3:
+		return "hs"
+	case 4:
+		return "ds"
+	case 5:
+		return "cs"
+	}
+	return ""
 }
 
-func (h MaterialHdr) TypeClass() byte {
-	return byte(h.Type >> 8)
+func MaterialVarClass(v DXVar) string {
+	switch v.Type {
+	case 1:
+		return "vector"
+	case 4:
+		return "matrix"
+	}
+	return ""
 }
 
-func (h MaterialHdr) ExtraTag() byte {
-	return byte(h.Extra)
+func DXVarType(v DXVar) string {
+	switch v.Type {
+	case 0:
+		return "float"
+	case 1:
+		return "int"
+	}
+	return ""
 }
 
-func (h MaterialHdr) ExtraClass() byte {
-	return byte(h.Extra >> 8)
-}
-
-func MaterialTypeKind(t uint16) string {
-	tag := byte(t)
-	if tag < 0xf0 {
+func lenStrAt(b []byte, off int) string {
+	if off < 0 || off+4 > len(b) {
 		return ""
 	}
-	if byte(t>>8) == 0x4d {
-		return "shader"
+	n := int(binary.LittleEndian.Uint32(b[off:]))
+	if n < 1 || n > lenStrMax || off+4+n > len(b) {
+		return ""
 	}
-	return "shader-obj"
+	s := b[off+4 : off+4+n]
+	for _, c := range s {
+		if c < 32 || c > 126 {
+			return ""
+		}
+	}
+	return string(s)
 }
 
-func MaterialSlotKind(slot, stage uint8) string {
-	if slot == 0 {
-		return "depth"
+func lenStrings(b []byte, lim int) []string {
+	var out []string
+	for i := 0; i+4 <= len(b) && len(out) < lim; {
+		s := lenStrAt(b, i)
+		if s == "" || len(s) < 2 {
+			i++
+			continue
+		}
+		out = append(out, s)
+		i += 4 + len(s)
 	}
-	if stage == 3 || stage == 4 {
-		return "tess"
-	}
-	return "color"
+	return uniqDX(out)
 }

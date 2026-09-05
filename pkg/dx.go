@@ -146,26 +146,46 @@ func dxKindText(st DXResStats) string {
 	return b.String()
 }
 
-func dxCountIDList(b []byte, compiled map[string]struct{}) (n, srcHit, dstHit int) {
+func dxIDListLayout(b []byte) (n, rec int) {
+	// u32 ver | u32 n | n 条：新版 48B（u32 20 + sha1 ×2），engine_res 旧版 40B（sha1 ×2）
 	if len(b) < 8 {
-		return 0, 0, 0
+		return 0, 0
 	}
 	n = int(binary.LittleEndian.Uint32(b[4:8]))
-	off := 8
-	for i := 0; i < n && off+48 <= len(b); i++ {
-		if binary.LittleEndian.Uint32(b[off:off+4]) != dxHashLen || binary.LittleEndian.Uint32(b[off+24:off+28]) != dxHashLen {
-			off += 48
-			continue
+	if n <= 0 {
+		return 0, 0
+	}
+	switch (len(b) - 8) / n {
+	case 48:
+		if 8+n*48 == len(b) {
+			return n, 48
 		}
-		a := hex.EncodeToString(b[off+4 : off+24])
-		d := hex.EncodeToString(b[off+28 : off+48])
+	case 40:
+		if 8+n*40 == len(b) {
+			return n, 40
+		}
+	}
+	return n, 0
+}
+
+func dxCountIDList(b []byte, compiled map[string]struct{}) (n, srcHit, dstHit int) {
+	n, rec := dxIDListLayout(b)
+	if rec == 0 {
+		return n, 0, 0
+	}
+	skip := 0
+	if rec == 48 {
+		skip = 4
+	}
+	for off := 8; off+rec <= len(b); off += rec {
+		a := hex.EncodeToString(b[off+skip : off+skip+dxHashLen])
+		d := hex.EncodeToString(b[off+rec-dxHashLen : off+rec])
 		if _, ok := compiled[a]; ok {
 			srcHit++
 		}
 		if _, ok := compiled[d]; ok {
 			dstHit++
 		}
-		off += 48
 	}
 	return n, srcHit, dstHit
 }

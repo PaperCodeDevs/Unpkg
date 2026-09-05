@@ -36,17 +36,21 @@ type DXInfo struct {
 	Size     int      `json:"size"`
 	DXOff    int      `json:"dxOff,omitempty"`
 	DXSize   int      `json:"dxSize,omitempty"`
+	DXCount  int      `json:"dxCount,omitempty"`
+	Stage    int      `json:"stage"`
 	Chunks   []string `json:"chunks,omitempty"`
 	Hash     string   `json:"hash,omitempty"`
-	WrapA    int      `json:"wrapA,omitempty"`
-	WrapB    int      `json:"wrapB,omitempty"`
+	SRV      int      `json:"srv"`
+	CB       int      `json:"cb"`
+	Sampler  int      `json:"sampler"`
+	Wrapped  bool     `json:"wrapped,omitempty"`
+	BindOK   bool     `json:"bindOk"`
 	Bindings []string `json:"bindings,omitempty"`
 	Signs    []string `json:"signs,omitempty"`
 	HLSL     []string `json:"hlsl,omitempty"`
 }
 
 func ExtractDXBC(b []byte) ([]byte, []byte, bool) {
-	// 包装头 10B：u32=DXBC.Size+6，随后 01 A B A 00 00，再接 DXBC 与绑定表
 	off := dxBCOff(b)
 	if off < 0 || off+28 > len(b) {
 		return nil, nil, false
@@ -64,11 +68,16 @@ func ExtractDXBC(b []byte) ([]byte, []byte, bool) {
 }
 
 func ClassifyDXBlob(name string, b []byte) DXInfo {
-	info := DXInfo{Name: name, Size: len(b), Kind: DXKindUnknown, DXOff: -1}
+	info := DXInfo{Name: name, Size: len(b), Kind: DXKindUnknown, DXOff: -1, Stage: -1}
 	low := strings.ToLower(name)
-	if len(b) == 24 && binary.LittleEndian.Uint32(b[:4]) == dxHashLen {
+	if len(b) == dxHashLen {
 		info.Kind = DXKindSHA1FP
-		info.Hash = hex.EncodeToString(b[4:24])
+		info.Hash = hex.EncodeToString(b)
+		return info
+	}
+	if len(b) == dxHashLen+4 && binary.LittleEndian.Uint32(b[:4]) == dxHashLen {
+		info.Kind = DXKindSHA1FP
+		info.Hash = hex.EncodeToString(b[4:])
 		return info
 	}
 	if strings.HasSuffix(low, ".templatemat") {
@@ -89,19 +98,56 @@ func ClassifyDXBlob(name string, b []byte) DXInfo {
 	if strings.HasSuffix(low, ".compute") || dxIsCompute(b) {
 		info.Kind = DXKindCompute
 		fillDXBC(&info, b)
+		info.DXCount = len(ExtractAllDXBC(b))
 		off := dxBCOff(b)
 		info.Bindings = dxASCIIIdents(b[:clamp(off, 0, len(b))], 4)
 		return info
 	}
-	if fillDXBC(&info, b) {
-		info.Kind = DXKindDXBC
-		if info.DXOff == dxWrapLen && len(b) >= dxWrapLen && b[4] == 1 {
-			info.WrapA = int(b[5])
-			info.WrapB = int(b[6])
-		}
+	if fillWrap(&info, b, false) {
 		return info
 	}
+	if plain, ok := DecodeWrapped(b); ok && len(plain) > MaterialHdrSize && string(plain[MaterialHdrSize:MaterialHdrSize+4]) == dxFourCC {
+		if fillWrap(&info, plain[materialHdrSHA1:], true) {
+			info.Wrapped = true
+			info.Hash = hex.EncodeToString(plain[:materialHdrSHA1])
+			return info
+		}
+	}
+	if fillDXBC(&info, b) {
+		info.Kind = DXKindDXBC
+	}
 	return info
+}
+
+func fillWrap(info *DXInfo, b []byte, material bool) bool {
+	w, err := ParseDXWrap(b)
+	if err != nil {
+		return false
+	}
+	info.Kind = DXKindDXBC
+	info.DXOff = dxWrapLen
+	info.DXSize = len(w.DXBC)
+	info.DXCount = 1
+	info.SRV, info.CB, info.Sampler = int(w.SRV), int(w.CB), int(w.Sampler)
+	info.Stage = DXProgramType(w.DXBC)
+	info.Chunks, info.Signs = dxChunks(w.DXBC)
+	var bd DXBinding
+	if material {
+		bd, err = ParseMaterialBinding(w.Extra)
+	} else {
+		bd, err = ParseDXBinding(w.Extra)
+	}
+	if err == nil {
+		info.BindOK = w.CountsOK(bd)
+		info.Hash = bd.Hash
+		info.Bindings = bd.Names()
+		return true
+	}
+	if h, names := dxParseExtra(w.Extra); h != "" || len(names) > 0 {
+		info.Hash = h
+		info.Bindings = names
+	}
+	return true
 }
 
 func fillDXBC(info *DXInfo, b []byte) bool {
@@ -111,6 +157,7 @@ func fillDXBC(info *DXInfo, b []byte) bool {
 	}
 	info.DXOff = dxBCOff(b)
 	info.DXSize = len(dx)
+	info.Stage = DXProgramType(dx)
 	info.Chunks, info.Signs = dxChunks(dx)
 	if h, names := dxParseExtra(extra); h != "" || len(names) > 0 {
 		info.Hash = h
