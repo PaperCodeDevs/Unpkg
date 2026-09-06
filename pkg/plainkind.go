@@ -45,8 +45,9 @@ const (
 )
 
 type PlainOpt struct {
-	Zip     ZipKeys
-	Rainbow RainbowKeys
+	Zip        ZipKeys
+	Rainbow    RainbowKeys
+	ServerList []byte
 }
 
 type PlainInfo struct {
@@ -57,9 +58,8 @@ type PlainInfo struct {
 }
 
 var (
-	utf8BOM          = []byte{0xEF, 0xBB, 0xBF}
-	ErrCipherUnknown = errors.New("serverlist: 8 字节分组密文，密钥未知")
-	plainMagics      = []struct {
+	utf8BOM     = []byte{0xEF, 0xBB, 0xBF}
+	plainMagics = []struct {
 		magic string
 		kind  PlainKind
 	}{
@@ -109,11 +109,6 @@ func ClassifyPlain(name string, body []byte) PlainKind {
 	return PlainUnknown
 }
 
-func looksJSONText(b []byte) bool {
-	t := bytes.TrimSpace(bytes.TrimPrefix(b, utf8BOM))
-	return len(t) > 0 && (t[0] == '{' || t[0] == '[')
-}
-
 func VerifyPlain(name string, body []byte, opt PlainOpt) (PlainInfo, error) {
 	info := PlainInfo{Kind: ClassifyPlain(name, body)}
 	var err error
@@ -158,72 +153,17 @@ func VerifyPlain(name string, body []byte, opt PlainOpt) (PlainInfo, error) {
 	case PlainTimeline:
 		info.Count, info.Detail, err = timelineHeader(body)
 	case PlainServerList:
-		info.Detail = "ecb8"
-		err = ErrCipherUnknown
+		var plain []byte
+		if plain, err = DecryptServerList(body, opt.ServerList); err == nil {
+			info.Detail = "des-ede2"
+			info.Count, err = walkXML(plain)
+		}
 	case PlainVisual:
 		_, err = base64.StdEncoding.DecodeString(strings.TrimSpace(string(body[6:])))
 	case PlainUnknown:
 		err = fmt.Errorf("unknown format head=% x", body[:hexHeadLen(body)])
 	}
 	return info, err
-}
-
-func JSONLenient(b []byte) []byte {
-	b = bytes.TrimPrefix(b, utf8BOM)
-	out := make([]byte, 0, len(b))
-	inStr := false
-	for i := 0; i < len(b); i++ {
-		c := b[i]
-		switch {
-		case inStr:
-			out = append(out, c)
-			if c == '\\' && i+1 < len(b) {
-				i++
-				out = append(out, b[i])
-			} else if c == '"' {
-				inStr = false
-			}
-		case c == '"':
-			inStr = true
-			out = append(out, c)
-		case c == '/' && i+1 < len(b) && b[i+1] == '/':
-			for i+1 < len(b) && b[i+1] != '\n' {
-				i++
-			}
-		case c == '/' && i+1 < len(b) && b[i+1] == '*':
-			if end := bytes.Index(b[i+2:], []byte("*/")); end >= 0 {
-				i += end + 3
-			} else {
-				i = len(b)
-			}
-		case c == ',' && nextNonSpaceCloses(b, i+1):
-		default:
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-func nextNonSpaceCloses(b []byte, i int) bool {
-	for i < len(b) {
-		switch {
-		case b[i] == ' ' || b[i] == '\t' || b[i] == '\r' || b[i] == '\n':
-			i++
-		case b[i] == '/' && i+1 < len(b) && b[i+1] == '/':
-			for i < len(b) && b[i] != '\n' {
-				i++
-			}
-		case b[i] == '/' && i+1 < len(b) && b[i+1] == '*':
-			end := bytes.Index(b[i+2:], []byte("*/"))
-			if end < 0 {
-				return false
-			}
-			i += end + 4
-		default:
-			return b[i] == '}' || b[i] == ']'
-		}
-	}
-	return false
 }
 
 func walkXML(body []byte) (int, error) {

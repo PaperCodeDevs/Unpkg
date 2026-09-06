@@ -107,7 +107,7 @@ func TestGIFZipTimelineServerList(t *testing.T) {
 		t.Fatalf("timeline info=%+v err=%v", info, err)
 	}
 	sl := append([]byte{0x5a, 0x12, 0xbe, 0x34, 0xc0, 0x18, 0xc3, 0x15}, make([]byte, 8)...)
-	if info, err := VerifyPlain("serverlist.data", sl, PlainOpt{}); !errors.Is(err, ErrCipherUnknown) || info.Kind != PlainServerList {
+	if info, err := VerifyPlain("serverlist.data", sl, PlainOpt{}); !errors.Is(err, ErrServerListKey) || info.Kind != PlainServerList {
 		t.Fatalf("serverlist info=%+v err=%v", info, err)
 	}
 	rk := RainbowKeys{Magic: "Rainbow\x00", XORKey: []byte{4, 8, 10, 26, 13, 29, 14, 0}}
@@ -125,8 +125,9 @@ func TestVerifyPlainRealPkgs(t *testing.T) {
 		filepath.Join(appdata, "miniworddata110", "pkg_assets", "patch_common_res.pkg"),
 	}
 	opt := PlainOpt{
-		Zip:     ZipKeys{K0: 0x1f85d854, K1: 0xdbaf3374, K2: 0xc4d7be09},
-		Rainbow: RainbowKeys{Magic: "Rainbow\x00", XORKey: []byte{4, 8, 10, 26, 13, 29, 14, 0}},
+		Zip:        ZipKeys{K0: 0x1f85d854, K1: 0xdbaf3374, K2: 0xc4d7be09},
+		Rainbow:    RainbowKeys{Magic: "Rainbow\x00", XORKey: []byte{4, 8, 10, 26, 13, 29, 14, 0}},
+		ServerList: []byte(serverListTestKey),
 	}
 	skip := map[PlainKind]bool{PlainUnknown: true, PlainEmpty: true}
 	seen := 0
@@ -150,7 +151,7 @@ func TestVerifyPlainRealPkgs(t *testing.T) {
 				continue
 			}
 			total[k]++
-			if _, err := VerifyPlain(n, body, opt); err != nil && !(k == PlainServerList && errors.Is(err, ErrCipherUnknown)) {
+			if _, err := VerifyPlain(n, body, opt); err != nil {
 				t.Errorf("%s %s: %v", filepath.Base(p), n, err)
 			}
 		}
