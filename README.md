@@ -6,6 +6,7 @@ Go 库：离线解析 LuaJIT 2.1 dump（标准 `1B 4C 4A 02`、迷你世界 `1B 
 github.com/PaperCodeDevs/Unpkg
 github.com/PaperCodeDevs/Unpkg/pkg
 github.com/PaperCodeDevs/Unpkg/crn
+github.com/PaperCodeDevs/Unpkg/zdeflate
 ```
 
 ```text
@@ -15,6 +16,7 @@ parse/             dump 头、proto、kgc/knum、扫描
 op/                标准 opcode 名 + 迷你世界编号对照
 lua/               反汇编 / 反编译（if-else、and/or、while/repeat、泛型 for、TDUP）/ 覆盖检查
 pkg/               .pkg 容器 Parse/Lookup、LZ4、engine/material 索引、贴图/FGUI/mesh、脚本 dump
+zdeflate/          zlib 1.2.7 raw deflate level 9（纯 Go，`Compress` / `pkg.RawDeflate`）
 crn/               Unity Crunch（format=29）
 cmd/ljdump         进程入口；扫 blob 时覆盖率不满则 exit 1
 ```
@@ -22,6 +24,12 @@ cmd/ljdump         进程入口；扫 blob 时覆盖率不满则 exit 1
 ```text
 ljdump <file|dir> [out-dir]
 ```
+
+## zdeflate
+
+纯 Go 移植 zlib 1.2.7 `deflate_slow`（无 zlib 头尾、无 cgo、不调 DLL）。`Compress` 默认 level 9、windowBits 15、memLevel 8、strategy 0（good=32、max_lazy=258、nice=258、max_chain=4096）。`pkg.RawDeflate` 转调它。
+
+本机 `%APPDATA%\miniworddata110\data` 与主仓 `.temp/rev-reslist2/samples`：游戏族成员（local ver=20、flags=0x0003、method=8、DOS time=0 date=32、extra=0；EncHead 非 11 字节零头、且不是 SpawnPro `zipEncHead` LCG）deflate **9950/9950** 与游戏压缩体逐字节相同（json 4975、bin 3773、script 707、trigger 495）。C zlib 1.2.7 oracle（空 / 1B / 64KiB 零 / 1MiB / 重复文本）逐字节一致。1MiB 压缩 4.2ms。
 
 ## pkg 实测（2026-08-31）
 

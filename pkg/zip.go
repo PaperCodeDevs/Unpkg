@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+
+	"github.com/PaperCodeDevs/Unpkg/zdeflate"
 )
 
 const (
@@ -101,19 +103,7 @@ func EncryptZipCrypto(plain []byte, k0, k1, k2 uint32) []byte {
 }
 
 func RawDeflate(src []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	w, err := flate.NewWriter(&buf, flate.DefaultCompression)
-	if err != nil {
-		return nil, fmt.Errorf("RawDeflate: %w", err)
-	}
-	if _, err := w.Write(src); err != nil {
-		_ = w.Close()
-		return nil, fmt.Errorf("RawDeflate: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		return nil, fmt.Errorf("RawDeflate: %w", err)
-	}
-	return buf.Bytes(), nil
+	return zdeflate.Compress(src), nil
 }
 
 func RawInflate(src []byte) ([]byte, error) {
