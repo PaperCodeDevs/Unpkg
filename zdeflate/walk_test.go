@@ -1,6 +1,7 @@
 package zdeflate_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"os"
 	"path/filepath"
@@ -106,16 +107,20 @@ func parseGameZip(path string, raw []byte) []gameMem {
 				break
 			}
 		}
-		if zero || spawnEnc10(crc, dec[:10]) {
+		if zero {
 			continue
 		}
 		plain, err := pkg.RawInflate(dec[12:])
 		if err != nil {
 			continue
 		}
+		comp := append([]byte(nil), dec[12:]...)
+		if spawnEnc10(crc, dec[:10]) && !bytes.Equal(zdeflate.Compress(plain), comp) {
+			continue
+		}
 		out = append(out, gameMem{
 			Path: path, Name: name, Kind: memberKind(name),
-			Plain: plain, Comp: append([]byte(nil), dec[12:]...),
+			Plain: plain, Comp: comp,
 		})
 	}
 	return out

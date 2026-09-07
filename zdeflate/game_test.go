@@ -31,11 +31,11 @@ func TestGameFamilyMembers(t *testing.T) {
 	for k, c := range by {
 		t.Logf("%s %d/%d", k, c[0], c[1])
 	}
-	if files != 4975 || len(mems) != 9950 || pass != 9950 {
-		t.Fatalf("files=%d members=%d pass=%d want 4975/9950/9950 first=%s", files, len(mems), pass, first)
+	if files != 4976 || len(mems) != 9952 || pass != 9952 {
+		t.Fatalf("files=%d members=%d pass=%d want 4976/9952/9952 first=%s", files, len(mems), pass, first)
 	}
 	want := map[string][2]int{
-		"json": {4975, 4975}, "bin": {3773, 3773}, "script": {707, 707}, "trigger": {495, 495},
+		"json": {4976, 4976}, "bin": {3773, 3773}, "script": {707, 707}, "trigger": {496, 496},
 	}
 	for k, w := range want {
 		if by[k] != w {
