@@ -5,7 +5,10 @@ import (
 	"image"
 )
 
-const blockBytes = 16
+const (
+	blockBytes  = 16
+	astcMaxSide = 16384
+)
 
 func UnityBlockSize(format uint32) (int, int) {
 	switch format {
@@ -26,7 +29,7 @@ func UnityBlockSize(format uint32) (int, int) {
 }
 
 func Decode(data []byte, width, height, blockW, blockH int) (*image.NRGBA, error) {
-	if width <= 0 || height <= 0 {
+	if width <= 0 || height <= 0 || width > astcMaxSide || height > astcMaxSide {
 		return nil, fmt.Errorf("astc: size %dx%d", width, height)
 	}
 	if blockW < 4 || blockW > 12 || blockH < 4 || blockH > 12 {
@@ -34,7 +37,14 @@ func Decode(data []byte, width, height, blockW, blockH int) (*image.NRGBA, error
 	}
 	bx := (width + blockW - 1) / blockW
 	by := (height + blockH - 1) / blockH
-	if need := bx * by * blockBytes; len(data) < need {
+	if bx <= 0 || by <= 0 {
+		return nil, fmt.Errorf("astc: blocks %dx%d", bx, by)
+	}
+	if uint64(bx) > (^uint64(0))/uint64(blockBytes)/uint64(by) {
+		return nil, fmt.Errorf("astc: blocks %dx%d overflow", bx, by)
+	}
+	need := bx * by * blockBytes
+	if len(data) < need {
 		return nil, fmt.Errorf("astc: need %d bytes, have %d", need, len(data))
 	}
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))

@@ -7,16 +7,19 @@ import (
 )
 
 type Reader struct {
-	data     []byte
-	idx      *pkgIndex
-	launcher *launcherIndex
-	over     *overlayPair
-	alt      *Reader
-	cache    map[int][]byte
-	bases    map[string]string
-	lower    map[string]string
-	mu       sync.Mutex
+	data       []byte
+	idx        *pkgIndex
+	launcher   *launcherIndex
+	over       *overlayPair
+	alt        *Reader
+	cache      map[int][]byte
+	cacheBytes int
+	bases      map[string]string
+	lower      map[string]string
+	mu         sync.Mutex
 }
+
+const blockCacheMaxBytes = lz4MaxUncomp
 
 func OpenReader(p *Pkg) (*Reader, error) {
 	if p == nil {
@@ -150,6 +153,9 @@ func (r *Reader) read(block uint32, off uint32, size uint32) ([]byte, error) {
 	if size == 0 {
 		return nil, fmt.Errorf("empty")
 	}
+	if uint64(size) > uint64(lz4MaxUncomp) {
+		return nil, fmt.Errorf("size %d", size)
+	}
 	out := make([]byte, 0, size)
 	pos := uint64(off)
 	left := uint64(size)
@@ -209,7 +215,21 @@ func (r *Reader) blockPlain(i int) ([]byte, error) {
 		return nil, err
 	}
 	r.mu.Lock()
-	r.cache[i] = plain
+	if b, ok := r.cache[i]; ok {
+		r.mu.Unlock()
+		return b, nil
+	}
+	if r.cache != nil {
+		n := len(plain)
+		if r.cacheBytes+n > blockCacheMaxBytes {
+			r.cache = map[int][]byte{}
+			r.cacheBytes = 0
+		}
+		if n <= blockCacheMaxBytes {
+			r.cache[i] = plain
+			r.cacheBytes += n
+		}
+	}
 	r.mu.Unlock()
 	return plain, nil
 }
@@ -221,6 +241,7 @@ func (r *Reader) DropCache() {
 	r.mu.Lock()
 	if r.cache != nil {
 		r.cache = map[int][]byte{}
+		r.cacheBytes = 0
 	}
 	r.mu.Unlock()
 	if r.over != nil {
@@ -241,6 +262,9 @@ func (r *Reader) blockPeek(i int) ([]byte, error) {
 
 func (r *Reader) decodeBlock(i int) ([]byte, error) {
 	st := r.idx.stor[i]
+	if uint64(st.uncomp) > uint64(lz4MaxUncomp) {
+		return nil, fmt.Errorf("uncomp %d", st.uncomp)
+	}
 	cs := r.idx.compAt[i]
 	ce := cs + uint64(st.comp)
 	if ce > uint64(len(r.data)) {
@@ -252,7 +276,7 @@ func (r *Reader) decodeBlock(i int) ([]byte, error) {
 	if st.comp == st.uncomp {
 		plain = append([]byte(nil), raw...)
 	} else {
-		if !lz4RatioOK(uint64(st.comp), uint64(st.uncomp)) {
+		if st.uncomp == 0 || !lz4RatioOK(uint64(st.comp), uint64(st.uncomp)) {
 			return nil, fmt.Errorf("uncomp ratio %d/%d", st.uncomp, st.comp)
 		}
 		plain, err = DecompressLZ4Block(raw, int(st.uncomp))

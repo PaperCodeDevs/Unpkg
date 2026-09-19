@@ -46,6 +46,12 @@ func alphaTable(a0, a1 uint8) (t [8]uint8) {
 	return
 }
 
+const maxBCSide = 16384
+
+func bcSideOK(w, h int) bool {
+	return w > 0 && h > 0 && w <= maxBCSide && h <= maxBCSide
+}
+
 func blitBlock(img *image.NRGBA, bx, by int, px *[16][4]uint8) {
 	w, h := img.Rect.Dx(), img.Rect.Dy()
 	for y := 0; y < 4; y++ {
@@ -69,6 +75,9 @@ func blitBlock(img *image.NRGBA, bx, by int, px *[16][4]uint8) {
 }
 
 func decodeDXT5(blocks []byte, w, h int) *image.NRGBA {
+	if !bcSideOK(w, h) {
+		return nil
+	}
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	bw, bh := (w+3)/4, (h+3)/4
 	var px [16][4]uint8
@@ -95,6 +104,9 @@ func decodeDXT5(blocks []byte, w, h int) *image.NRGBA {
 }
 
 func decodeDXT1(blocks []byte, w, h int) *image.NRGBA {
+	if !bcSideOK(w, h) {
+		return nil
+	}
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	bw, bh := (w+3)/4, (h+3)/4
 	var px [16][4]uint8

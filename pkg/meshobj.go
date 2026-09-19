@@ -27,6 +27,9 @@ func ParseObjMesh(raw []byte) (*BlockMesh, error) {
 			if len(fs) < 4 {
 				continue
 			}
+			if len(vs) >= meshMaxVert {
+				return nil, fmt.Errorf("obj verts")
+			}
 			x, y, z, err := threeFloat(fs)
 			if err != nil {
 				return nil, err
@@ -35,6 +38,9 @@ func ParseObjMesh(raw []byte) (*BlockMesh, error) {
 		case "vt":
 			if len(fs) < 2 {
 				continue
+			}
+			if len(vts) >= meshMaxVert {
+				return nil, fmt.Errorf("obj vts")
 			}
 			u, err := parseF32(fs[1])
 			if err != nil {
@@ -65,6 +71,9 @@ func ParseObjMesh(raw []byte) (*BlockMesh, error) {
 				continue
 			}
 			for i := 1; i+1 < len(cs); i++ {
+				if len(idx)+3 > meshMaxIdx {
+					return nil, fmt.Errorf("obj idx")
+				}
 				tri := [3]corner{cs[0], cs[i], cs[i+1]}
 				for _, c := range tri {
 					p := vs[c.vi]

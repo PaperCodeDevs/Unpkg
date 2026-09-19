@@ -123,11 +123,20 @@ func DumpBlockTexturesReport(pkgPaths []string, outDir string, filterPrefix stri
 	}
 	sort.Strings(names)
 	for _, k := range names {
-		if err := os.WriteFile(filepath.Join(outDir, k+".png"), entries[k], 0o644); err != nil {
+		rel := SanitizeScriptOutPath(k + ".png")
+		dst := filepath.Join(outDir, rel)
+		if !PathInDir(outDir, dst) {
+			res.Failed = append(res.Failed, k+": path")
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return res, err
 		}
+		if err := os.WriteFile(dst, entries[k], 0o644); err != nil {
+			return res, err
+		}
+		res.OK++
 	}
-	res.OK = len(entries)
 	return res, nil
 }
 

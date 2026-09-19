@@ -225,10 +225,13 @@ func decodeBC7Block(src []byte, dst []byte, pitch int) {
 }
 
 func DecodeBC7(blocks []byte, w, h int) (*image.NRGBA, error) {
-	if w <= 0 || h <= 0 {
+	if !bcSideOK(w, h) {
 		return nil, fmt.Errorf("bc7 size")
 	}
 	bw, bh := (w+3)/4, (h+3)/4
+	if bh <= 0 || uint64(bw) > (^uint64(0))/16/uint64(bh) {
+		return nil, fmt.Errorf("bc7 blocks")
+	}
 	need := bw * bh * 16
 	if len(blocks) < need {
 		return nil, fmt.Errorf("bc7 short")

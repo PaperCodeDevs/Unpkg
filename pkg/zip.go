@@ -14,6 +14,7 @@ import (
 const (
 	ZipLocalMagic   = 0x04034b50
 	maxInflateBytes = 32 << 20
+	zipMaxEntries   = 65536
 )
 
 type ZipEntry struct {
@@ -59,6 +60,9 @@ func ScanZipEntries(data []byte) []ZipEntry {
 			continue
 		}
 		out = append(out, e)
+		if len(out) >= zipMaxEntries {
+			break
+		}
 	}
 	return out
 }
@@ -123,6 +127,9 @@ func inflateZipPayload(payload []byte, e ZipEntry, keys ZipKeys) ([]byte, error)
 	if e.Method != 0 && e.Method != 8 {
 		return nil, fmt.Errorf("method=%d unsupported", e.Method)
 	}
+	if e.Method == 0 && len(payload) > maxInflateBytes+12 {
+		return nil, fmt.Errorf("stored too large")
+	}
 	comp := payload
 	if e.Flag&1 != 0 {
 		if len(payload) < 12 {
@@ -131,6 +138,9 @@ func inflateZipPayload(payload []byte, e ZipEntry, keys ZipKeys) ([]byte, error)
 		comp = DecryptZipCrypto(payload, keys.K0, keys.K1, keys.K2)[12:]
 	}
 	if e.Method == 0 {
+		if len(comp) > maxInflateBytes {
+			return nil, fmt.Errorf("stored too large")
+		}
 		return append([]byte(nil), comp...), nil
 	}
 	return RawInflate(comp)

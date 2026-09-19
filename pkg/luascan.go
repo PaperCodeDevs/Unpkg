@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const luaEmbedMaxHits = 8192
+
 var luaJITFileMagic = []byte{0x1b, 'L', 'J', 0x90}
 
 type embeddedLua struct {
@@ -43,6 +45,9 @@ func extractEmbeddedLuaSources(plain []byte) []embeddedLua {
 			continue
 		}
 		out = append(out, embeddedLua{Path: filepath.ToSlash(path), Body: body})
+		if len(out) >= luaEmbedMaxHits {
+			break
+		}
 	}
 	return out
 }
@@ -78,6 +83,9 @@ func extractLuaJITByPath(plain []byte) []embeddedLua {
 			continue
 		}
 		out = append(out, embeddedLua{Path: filepath.ToSlash(path), Body: body})
+		if len(out) >= luaEmbedMaxHits {
+			break
+		}
 	}
 	return out
 }

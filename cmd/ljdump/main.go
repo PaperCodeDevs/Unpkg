@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/PaperCodeDevs/Unpkg"
+	luajit "github.com/PaperCodeDevs/Unpkg"
+	"github.com/PaperCodeDevs/Unpkg/pkg"
 )
 
 func main() {
@@ -129,7 +130,12 @@ func runScan(blob []byte, outDir string) {
 		if name == "" {
 			name = fmt.Sprintf("dump_%d", i)
 		}
-		dst := filepath.Join(outDir, filepath.FromSlash(name)+".lua")
+		rel := pkg.SanitizeScriptOutPath(name + ".lua")
+		dst := filepath.Join(outDir, rel)
+		if !pkg.PathInDir(outDir, dst) {
+			fmt.Fprintf(os.Stderr, "off=%d path %q\n", h.Off, name)
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

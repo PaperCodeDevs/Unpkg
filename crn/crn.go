@@ -52,9 +52,17 @@ func (u *unpacker) level(i uint32) (*image.NRGBA, error) {
 	}
 	switch u.h.Format {
 	case FmtDXT1:
-		return decodeDXT1(blocks, int(w), int(h)), nil
+		img := decodeDXT1(blocks, int(w), int(h))
+		if img == nil {
+			return nil, fmt.Errorf("crn: bc1 size")
+		}
+		return img, nil
 	case FmtDXT5, 3, 4, 5, 6:
-		return decodeDXT5(blocks, int(w), int(h)), nil
+		img := decodeDXT5(blocks, int(w), int(h))
+		if img == nil {
+			return nil, fmt.Errorf("crn: bc3 size")
+		}
+		return img, nil
 	}
 	return nil, fmt.Errorf("crn: 不支持的格式 %d", u.h.Format)
 }

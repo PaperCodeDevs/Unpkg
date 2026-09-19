@@ -10,6 +10,8 @@ import (
 	"math"
 )
 
+const atlasMaxSide = 16384
+
 func cropFGUISprite(s *fguiSet, h fguiHit) ([]byte, error) {
 	if s == nil || h.sp.file == "" {
 		return nil, fmt.Errorf("cropFGUISprite: 空切片")
@@ -19,6 +21,9 @@ func cropFGUISprite(s *fguiSet, h fguiHit) ([]byte, error) {
 		return nil, err
 	}
 	sp := h.sp
+	if sp.w <= 0 || sp.h <= 0 || sp.w > atlasMaxSide || sp.h > atlasMaxSide {
+		return nil, fmt.Errorf("cropFGUISprite: size %dx%d", sp.w, sp.h)
+	}
 	x, y, w, hgt := sp.x, sp.y, sp.w, sp.h
 	if sp.rot {
 		w, hgt = sp.h, sp.w
@@ -28,15 +33,24 @@ func cropFGUISprite(s *fguiSet, h fguiHit) ([]byte, error) {
 		x, y, w, hgt = scaleRect(x, y, w, hgt, float64(b.Dx())/float64(aw), float64(b.Dy())/float64(ah))
 	}
 	cx, cy, cw, ch := clampRect(x, y, w, hgt, b.Dx(), b.Dy())
-	if sp.w <= 0 || sp.h <= 0 || cw <= 0 || ch <= 0 || cx-x > 1 || cy-y > 1 || x+w-cx-cw > 1 || y+hgt-cy-ch > 1 {
+	if cw <= 0 || ch <= 0 || cx-x > 1 || cy-y > 1 || x+w-cx-cw > 1 || y+hgt-cy-ch > 1 {
 		return nil, fmt.Errorf("cropFGUISprite: 矩形越界 %d,%d %dx%d atlas=%s", sp.x, sp.y, sp.w, sp.h, b)
+	}
+	if _, err := nrgbaPix(cw, ch); err != nil {
+		return nil, fmt.Errorf("cropFGUISprite: %w", err)
 	}
 	out := image.NewNRGBA(image.Rect(0, 0, cw, ch))
 	draw.Draw(out, out.Bounds(), img, image.Pt(cx, cy), draw.Src)
 	if sp.rot {
+		if _, err := nrgbaPix(ch, cw); err != nil {
+			return nil, fmt.Errorf("cropFGUISprite: %w", err)
+		}
 		out = rotateRight(out)
 	}
 	if out.Bounds().Dx() != sp.w || out.Bounds().Dy() != sp.h {
+		if _, err := nrgbaPix(sp.w, sp.h); err != nil {
+			return nil, fmt.Errorf("cropFGUISprite: %w", err)
+		}
 		out = resizeNRGBA(out, sp.w, sp.h)
 	}
 	var buf bytes.Buffer
@@ -83,8 +97,39 @@ func clampRect(x, y, w, h, maxW, maxH int) (int, int, int, int) {
 	return x, y, w, h
 }
 
+func nrgbaPix(w, h int) (int, error) {
+	if w <= 0 || h <= 0 || w > atlasMaxSide || h > atlasMaxSide {
+		return 0, fmt.Errorf("nrgba size %dx%d", w, h)
+	}
+	n, ok := mulInt(w, h)
+	if !ok {
+		return 0, fmt.Errorf("nrgba size %dx%d", w, h)
+	}
+	n, ok = mulInt(n, 4)
+	if !ok {
+		return 0, fmt.Errorf("nrgba size %dx%d", w, h)
+	}
+	return n, nil
+}
+
+func mulInt(a, b int) (int, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	if a > math.MaxInt/b {
+		return 0, false
+	}
+	return a * b, true
+}
+
 func resizeNRGBA(src *image.NRGBA, w, h int) *image.NRGBA {
 	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
+	if _, err := nrgbaPix(w, h); err != nil {
+		return image.NewNRGBA(image.Rect(0, 0, 0, 0))
+	}
 	out := image.NewNRGBA(image.Rect(0, 0, w, h))
 	if sw <= 0 || sh <= 0 || w <= 0 || h <= 0 {
 		return out
@@ -134,11 +179,21 @@ func decodeAtlasImage(raw []byte) (*image.NRGBA, error) {
 	if img, err := DecodeTextureImage(raw); err == nil {
 		return img, nil
 	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > atlasMaxSide || cfg.Height > atlasMaxSide {
+		return nil, fmt.Errorf("atlas size %dx%d", cfg.Width, cfg.Height)
+	}
 	im, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
 	b := im.Bounds()
+	if b.Dx() > atlasMaxSide || b.Dy() > atlasMaxSide {
+		return nil, fmt.Errorf("atlas size %dx%d", b.Dx(), b.Dy())
+	}
 	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(out, out.Bounds(), im, b.Min, draw.Src)
 	return flipNRGBA(out), nil

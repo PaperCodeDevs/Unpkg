@@ -219,7 +219,10 @@ func dumpIndexed(path, outDir string, extract bool) error {
 		if err != nil {
 			continue
 		}
-		dst := filepath.Join(filesDir, filepath.FromSlash(sanitizePkgOut(name)))
+		dst := filepath.Join(filesDir, sanitizePkgOut(name))
+		if !PathInDir(filesDir, dst) {
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
@@ -284,7 +287,5 @@ func dumpMaterial(path, outDir string) error {
 }
 
 func sanitizePkgOut(name string) string {
-	name = strings.TrimPrefix(name, "../")
-	name = strings.TrimPrefix(name, "./")
-	return filepath.Clean(strings.ReplaceAll(name, "..", "_"))
+	return SanitizeScriptOutPath(name)
 }

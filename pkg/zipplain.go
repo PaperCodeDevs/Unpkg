@@ -25,6 +25,9 @@ func (r *Reader) ScanZipPlain() ([]ZipEntry, error) {
 	var out []ZipEntry
 	var carry []byte
 	for i := range r.idx.stor {
+		if len(out) >= zipMaxEntries {
+			break
+		}
 		plain, err := r.blockPeek(i)
 		if err != nil {
 			return nil, fmt.Errorf("ScanZipPlain block %d: %w", i, err)
@@ -61,6 +64,9 @@ func zipTail(carry, plain []byte) []byte {
 // boundary 是拼接缓冲里前段尾巴的长度；数据区不越过它的头整个落在前一块，前一块整块扫时已收。
 func scanZipBuf(buf []byte, limit, boundary int, base, total uint64, out *[]ZipEntry) {
 	for j := 0; j < limit && j+30 <= len(buf); j++ {
+		if len(*out) >= zipMaxEntries {
+			return
+		}
 		if binary.LittleEndian.Uint32(buf[j:]) != ZipLocalMagic {
 			continue
 		}

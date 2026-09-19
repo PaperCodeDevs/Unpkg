@@ -131,6 +131,23 @@ func SanitizeScriptOutPath(name string) string {
 	return filepath.Join(keep...)
 }
 
+func PathInDir(root, path string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
 func relFail(root, path string) string {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {

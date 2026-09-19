@@ -35,10 +35,10 @@ func DecompressLZ4Block(src []byte, maxSize int) ([]byte, error) {
 		return nil, fmt.Errorf("DecompressLZ4Block: empty")
 	}
 	if maxSize <= 0 {
-		maxSize = 128 << 20
-	}
-	if maxSize > 1<<40 {
 		return nil, fmt.Errorf("DecompressLZ4Block: maxSize %d", maxSize)
+	}
+	if maxSize > lz4MaxUncomp {
+		maxSize = lz4MaxUncomp
 	}
 	dst := make([]byte, maxSize+32)
 	iend := len(src)

@@ -256,3 +256,10 @@ func fguiAssetPath(name string) string {
 	name = strings.ReplaceAll(name, "\\", "/")
 	return strings.TrimSuffix(name, ".fui")
 }
+
+func (p *fguiPkg) outDirName() string {
+	if p == nil {
+		return "_"
+	}
+	return SanitizeScriptOutPath(p.name)
+}

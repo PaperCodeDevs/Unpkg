@@ -105,7 +105,15 @@ func rawDXT(pix []byte, w, h, block int) (*image.NRGBA, error) {
 		return nil, fmt.Errorf("dxt short")
 	}
 	if block == 8 {
-		return crn.DecodeBC1(pix[:need], w, h), nil
+		img := crn.DecodeBC1(pix[:need], w, h)
+		if img == nil {
+			return nil, fmt.Errorf("dxt size")
+		}
+		return img, nil
 	}
-	return crn.DecodeBC3(pix[:need], w, h), nil
+	img := crn.DecodeBC3(pix[:need], w, h)
+	if img == nil {
+		return nil, fmt.Errorf("dxt size")
+	}
+	return img, nil
 }

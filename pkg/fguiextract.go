@@ -26,15 +26,23 @@ func ExtractFGUI(pkgPaths []string, packName, outDir string) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(outDir, p.name)
+	safe := p.outDirName()
+	dir := filepath.Join(outDir, safe)
+	if !PathInDir(outDir, dir) {
+		return fmt.Errorf("ExtractFGUI: path")
+	}
 	if err := os.MkdirAll(filepath.Join(dir, "atlas"), 0o755); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "font"), 0o755); err != nil {
 		return err
 	}
-	fuiName := p.name + ".fui"
-	if err := os.WriteFile(filepath.Join(dir, fuiName), raw, 0o644); err != nil {
+	fuiName := filepath.Base(safe) + ".fui"
+	fuiPath := filepath.Join(dir, fuiName)
+	if !PathInDir(dir, fuiPath) {
+		return fmt.Errorf("ExtractFGUI: path")
+	}
+	if err := os.WriteFile(fuiPath, raw, 0o644); err != nil {
 		return err
 	}
 	done := map[string]bool{}
@@ -54,12 +62,15 @@ func ExtractFGUI(pkgPaths []string, packName, outDir string) error {
 			continue
 		}
 		done[got] = true
-		base := filepath.Base(got)
+		base := SanitizeScriptOutPath(filepath.Base(got))
 		low := strings.ToLower(base)
 		if it.typ == fguiTypeAtlas || strings.HasSuffix(low, ".png") || strings.HasSuffix(low, ".jpg") {
 			img, err := decodeAtlasImage(data)
 			if err != nil {
-				_ = os.WriteFile(filepath.Join(dir, "atlas", base+".raw"), data, 0o644)
+				rawPath := filepath.Join(dir, "atlas", base+".raw")
+				if PathInDir(dir, rawPath) {
+					_ = os.WriteFile(rawPath, data, 0o644)
+				}
 				continue
 			}
 			var buf bytes.Buffer
@@ -67,13 +78,21 @@ func ExtractFGUI(pkgPaths []string, packName, outDir string) error {
 				return err
 			}
 			pngName := strings.TrimSuffix(base, filepath.Ext(base)) + ".png"
-			if err := os.WriteFile(filepath.Join(dir, "atlas", pngName), buf.Bytes(), 0o644); err != nil {
+			pngPath := filepath.Join(dir, "atlas", pngName)
+			if !PathInDir(dir, pngPath) {
+				continue
+			}
+			if err := os.WriteFile(pngPath, buf.Bytes(), 0o644); err != nil {
 				return err
 			}
 			continue
 		}
 		if strings.HasSuffix(low, ".ttf") || strings.HasSuffix(low, ".otf") || strings.HasSuffix(low, ".fnt") {
-			if err := os.WriteFile(filepath.Join(dir, "font", base), data, 0o644); err != nil {
+			fontPath := filepath.Join(dir, "font", base)
+			if !PathInDir(dir, fontPath) {
+				continue
+			}
+			if err := os.WriteFile(fontPath, data, 0o644); err != nil {
 				return err
 			}
 		}
