@@ -10,6 +10,7 @@ type Proto = parse.Proto
 type Batch = lua.Batch
 type Hit = parse.Hit
 type Cover = lua.Cover
+type CapRec = lua.CapRec
 
 func Parse(raw []byte) (*Dump, error) {
 	return parse.Parse(raw)
@@ -53,4 +54,20 @@ func Audit(d *Dump, src string) Cover {
 
 func RunDir(inDir, outDir string) (Batch, error) {
 	return lua.RunDir(inDir, outDir)
+}
+
+func RunTree(srcRoot, outRoot string) (Batch, error) {
+	return lua.RunTree(srcRoot, outRoot)
+}
+
+func ReadCap(raw []byte) ([]CapRec, error) {
+	return lua.ReadCap(raw)
+}
+
+func DumpDecompileCap(srcFile, outRoot string) (Batch, error) {
+	return lua.DumpDecompileCap(srcFile, outRoot)
+}
+
+func DefaultLuaTreeOldPkg() string {
+	return lua.DefaultLuaTreeOldPkg()
 }

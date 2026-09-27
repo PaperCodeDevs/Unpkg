@@ -77,3 +77,30 @@ func (b *Batch) fail(n *int, path, msg string) {
 func (b Batch) String() string {
 	return fmt.Sprintf("parse ok=%d fail=%d lua ok=%d fail=%d", b.ParseOK, b.ParseFail, b.LuaOK, b.LuaFail)
 }
+
+func RunTree(srcRoot, outRoot string) (Batch, error) {
+	if strings.TrimSpace(srcRoot) == "" {
+		return Batch{}, fmt.Errorf("src tree empty")
+	}
+	st, err := os.Stat(srcRoot)
+	if err != nil {
+		return Batch{}, fmt.Errorf("src: %w", err)
+	}
+	if !st.IsDir() {
+		return DumpDecompileCap(srcRoot, outRoot)
+	}
+	return RunDir(srcRoot, outRoot)
+}
+
+func DefaultLuaTreeOldPkg() string {
+	candidates := []string{
+		filepath.Join(".temp", "lua_dump.bin"),
+		filepath.Join("C:\\Users\\Administrator\\Desktop\\Mini", "tools", "pkg", "dump", "lua_tree_old_pkg"),
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
